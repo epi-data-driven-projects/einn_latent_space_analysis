@@ -53,6 +53,5 @@ class BaseNeuralNetwork(nn.Module):
 
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight)
-            # Defensive programming: ensure bias exists before filling it
             if m.bias is not None:
                 m.bias.data.fill_(0.01)
