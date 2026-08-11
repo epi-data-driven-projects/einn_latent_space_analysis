@@ -12,12 +12,11 @@ class TransformerAttn(nn.Module):
     def __init__(self, dim_in: int = 40, value_dim: int = 40, key_dim: int = 40) -> None:
         """
         Initializes the attention layers.
-
-        Args:
-            dim_in (int): Dimensionality of input sequence features.
-            value_dim (int): Dimension of the value transform.
-            key_dim (int): Dimension of the key transform.
+        :param int dim_in: Dimensionality of input sequence features.
+        :param int value_dim: Dimension of the value transform.
+        :param int key_dim: Dimension of the key transform.
         """
+
         super(TransformerAttn, self).__init__()
         self.value_layer = nn.Linear(in_features=dim_in, out_features=value_dim)
         self.query_layer = nn.Linear(in_features=dim_in, out_features=value_dim)
@@ -26,12 +25,8 @@ class TransformerAttn(nn.Module):
     def forward(self, seq: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for standard self-attention.
-
-        Args:
-            seq (torch.Tensor): Sequence tensor. Shape: [Batch, Seq_len, dim_in].
-
-        Returns:
-            torch.Tensor: Attended sequence. Shape: [Batch, Seq_len, key_dim].
+        :param torch.Tensor seq: Sequence tensor. Shape: [Batch, Seq_len, dim_in].
+        :return torch.Tensor: Attended sequence. Shape: [Batch, Seq_len, key_dim].
         """
         # Linear projections
         # Output shapes: [Batch, Seq_len, value_dim/key_dim]
@@ -55,15 +50,12 @@ class TransformerAttn(nn.Module):
     def forward_mask(self, seq: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for masked self-attention, ignoring specific sequence steps.
-
-        Args:
-            seq (torch.Tensor): Sequence tensor. Shape: [Batch, Seq_len, dim_in].
-            mask (torch.Tensor): Mask tensor. Shape: [Batch, Seq_len].
-                                 Values should be 1 for valid steps, 0 for ignored steps.
-
-        Returns:
-            torch.Tensor: Masked and attended sequence. Shape: [Batch, Seq_len, key_dim].
+        :param torch.Tensor seq: Sequence tensor. Shape: [Batch, Seq_len, dim_in].
+        :param torch.Tensor mask: Mask tensor. Shape: [Batch, Seq_len].
+                                         Values should be 1 for valid steps, 0 for ignored steps.
+        :return torch.Tensor: Masked and attended sequence. Shape: [Batch, Seq_len, key_dim].
         """
+
         value = self.value_layer(seq)
         query = self.query_layer(seq)
         keys = self.key_layer(seq)
