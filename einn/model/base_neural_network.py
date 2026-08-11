@@ -9,7 +9,7 @@ class BaseNeuralNetwork(nn.Module):
     """
 
     def __init__(self) -> None:
-        super(BaseNeuralNetwork, self).__init__()
+        super().__init__()
 
     def freeze_parameters(self) -> None:
         """

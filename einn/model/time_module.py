@@ -19,7 +19,7 @@ class TimeModule(BaseNeuralNetwork):
         :param int out_dim: Final output dimension (d_e).
         :param int seed: Random seed for reproducible B_gauss generation.
         """
-        super(TimeModule, self).__init__()
+        super().__init__()
 
         # Generate and register the fixed Gaussian matrix B_gauss.
         # register_buffer ensures B_gauss automatically moves to the GPU when .to(device) is called.

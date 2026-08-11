@@ -17,7 +17,7 @@ class OutputModule(BaseNeuralNetwork):
         :param int d_e: Dimension of the input embedding.
         :param int d_s: Number of ODE compartment states.
         """
-        super(OutputModule, self).__init__()
+        super().__init__()
 
         # Deep MLP architecture mapping embeddings to state space
         # d_e -> 2*d_e -> 2*d_e -> d_e -> d_s

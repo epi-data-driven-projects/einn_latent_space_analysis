@@ -17,7 +17,7 @@ class TransformerAttn(nn.Module):
         :param int key_dim: Dimension of the key transform.
         """
 
-        super(TransformerAttn, self).__init__()
+        super().__init__()
         self.value_layer = nn.Linear(in_features=dim_in, out_features=value_dim)
         self.query_layer = nn.Linear(in_features=dim_in, out_features=value_dim)
         self.key_layer = nn.Linear(in_features=dim_in, out_features=key_dim)

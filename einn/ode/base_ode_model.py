@@ -23,7 +23,7 @@ class BaseODEModel(nn.Module, ABC):
         :param float pop_total: Total population size for normalization.
         :param str device: Compute device ('cpu' or 'cuda').
         """
-        super(BaseODEModel, self).__init__()
+        super().__init__()
         self.pop_total = pop_total
         self.seq_len = seq_len
         self.d_p = d_p

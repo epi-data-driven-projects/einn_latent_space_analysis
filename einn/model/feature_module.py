@@ -30,7 +30,7 @@ class FeatureModule(BaseNeuralNetwork):
         :param bool bidirectional: Whether the Encoder GRU is bidirectional.
         :param float dropout: Dropout probability.
         """
-        super(FeatureModule, self).__init__()
+        super().__init__()
 
         self.dim_seq_in = dim_seq_in
         self.rnn_out = rnn_out
