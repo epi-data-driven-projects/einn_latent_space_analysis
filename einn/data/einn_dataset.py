@@ -15,12 +15,12 @@ class EINNDataset(Dataset):
         """
         Initializes the dataset, detaches tensors from the computation graph, and moves them to the target device.
 
-        :param x torch.Tensor: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
-        :param y torch.Tensor: the target variable
-        :param t torch.Tensor: time
-        :param aux_targets torch.Tensor: The ideal trajectories (ODE pre-calibration).
-        :param window_size (int, optional): Size of the sliding window. If None, uses the full sequence.
-        :param device torch. (str): Device to store the dataset tensors on ('cpu' or 'cuda').
+        :param torch.Tensor x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
+        :param torch.Tensor y : the target variable
+        :param torch.Tensor t: time
+        :param torch.Tensor aux_targets: The ideal trajectories (ODE pre-calibration).
+        :param (int, optional) window_size: Size of the sliding window. If None, uses the full sequence.
+        :param str device: Device to store the dataset tensors on ('cpu' or 'cuda').
         """
         self.device = torch.device(device)
 
