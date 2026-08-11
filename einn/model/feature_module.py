@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
@@ -55,7 +57,7 @@ class FeatureModule(BaseNeuralNetwork):
 
         # DECODER
         self.dec_rnn = nn.GRU(
-            input_size=1,
+            input_size=1,  # time
             hidden_size=self.rnn_out // self.num_directions,
             num_layers=self.n_layers,
             bidirectional=self.bidirectional,
@@ -71,17 +73,21 @@ class FeatureModule(BaseNeuralNetwork):
         # Initialize linear layers with Xavier uniform
         self.dec_out_layer.apply(self._init_weights)
 
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
         """
         Encodes the input sequence into a fixed-size context vector.
         :param torch.Tensor x: Input sequence. Shape: [Batch, Seq_len, dim_seq_in].
+        :param torch.Tensor mask: Optional mask tensor. Shape: [Batch, Seq_len].
         :return torch.Tensor: Context vector (h). Shape: [Batch, rnn_out].
         """
         # latent_seqs shape: [Batch, Seq_len, rnn_out]
         latent_seqs, _ = self.enc_rnn(x)
 
-        # Apply self-attention -> Shape remains: [Batch, Seq_len, rnn_out]
-        latent_seqs = self.attn_layer(latent_seqs)
+        if mask is not None:
+            latent_seqs = self.attn_layer(latent_seqs, mask)
+        else:
+            # Apply self-attention -> Shape remains: [Batch, Seq_len, rnn_out]
+            latent_seqs = self.attn_layer(latent_seqs)
 
         # Aggregate over the time dimension (dim=1) to create a single context vector per batch
         # Shape becomes: [Batch, rnn_out]
@@ -108,21 +114,22 @@ class FeatureModule(BaseNeuralNetwork):
         h0 = h_reshaped.transpose(0, 1).repeat(self.n_layers, 1, 1).contiguous()
 
         # Pass through Decoder GRU. Output shape: [Batch, Seq_len, rnn_out]
-        latent_seqs, _ = self.dec_rnn(t, h0)
+        latent_seqs, _ = self.dec_rnn(t=t, h0=h0)
 
         # Final projection to embedding space. Shape: [Batch, Seq_len, dim_out]
         e_t_f = self.dec_out_layer(latent_seqs)
         return e_t_f
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, t: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
         """
         Full forward pass mapping sequences to embeddings at given time steps.
         :param torch.Tensor x: Input observations. Shape: [Batch, Seq_len, dim_seq_in].
         :param torch.Tensor t: Target time steps. Shape: [Batch, Seq_len, 1].
+        :param torch.Tensor mask: Optional mask tensor. Shape: [Batch, Seq_len].
         :return torch.Tensor: Feature embeddings. Shape: [Batch, Seq_len, dim_out].
         """
 
-        h = self.encode(x)
-        e_t_f = self.decode(h, t)
+        h = self.encode(x=x, mask=mask)
+        e_t_f = self.decode(h=h, t=t)
 
         return e_t_f
