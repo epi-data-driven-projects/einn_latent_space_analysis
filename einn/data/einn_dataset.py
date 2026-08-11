@@ -25,14 +25,14 @@ class EINNDataset(Dataset):
         self.device = torch.device(device)
 
         # Squeeze out the batch dimension if the user passes tensors in [1, Seq_len, Features] format.
-        # This makes the slicing logic in __getitem__ much cleaner.
+        # This makes the slicing logic in __getitem__ cleaner
         if x.dim() == 3 and x.size(0) == 1:
             x = x.squeeze(0)
             y = y.squeeze(0)
             t = t.squeeze(0)
             aux_targets = aux_targets.squeeze(0)
 
-        # .detach() ensures no gradients are tracked from previous data processing steps (CRITICAL).
+        # .detach() ensures no gradients are tracked from previous data processing steps
         # .float() ensures the correct precision for PyTorch default settings.
         # .to(device) moves all data to GPU RAM upfront, maximizing __getitem__ speed during training.
         self.x = x.detach().float().to(self.device)
