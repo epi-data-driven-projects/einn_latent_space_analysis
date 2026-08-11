@@ -16,6 +16,9 @@ class EINNConfig:
     - d_p (int): Number of physical ODE parameters (e.g., 4 for SEIRM, 2 for SIR).
     - learning_rate (float): The learning rate used by the Adam optimizers during training.
     - epochs_per_phase (int): Number of training epochs to execute for each of the 4 training phases.
+    - early_stopping_min_delta (float): How much change counts as an improvement
+    - early_stopping_patience (int): How many epochs to wait before stopping
+    - early_stopping_min_percentage (bool): If True, min_delta is a percentage (%)
     - future_steps (int): Number of time steps to forecast into the future during inference/prediction.
     - device (str): The computing device to use ('cuda' or 'cpu'). Automatically defaults to GPU if available.
     - loss_weights (Dict[str, float]): Weighting factors for various loss components (data matching,
@@ -27,7 +30,11 @@ class EINNConfig:
     d_p: int = 4
 
     learning_rate: float = 0.001
-    epochs_per_phase: int = 100
+    epochs_per_phase: int = 1000
+
+    early_stopping_min_delta: float = 0.0
+    early_stopping_patience: int = 10
+    early_stopping_min_percentage: bool = False
 
     future_steps: int = 30
 
