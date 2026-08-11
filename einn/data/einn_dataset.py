@@ -47,25 +47,23 @@ class EINNDataset(Dataset):
 
         # Validation to prevent out-of-bounds slicing errors
         if self.window_size > self.seq_len:
-            raise ValueError(f"Window size ({self.window_size}) cannot be strictly larger than the sequence length ({self.seq_len}).")
+            raise ValueError(f"Window size ({self.window_size}) cannot be " + \
+                             f"strictly larger than the sequence length ({self.seq_len}).")
 
     def __len__(self) -> int:
         """
-        Returns the total number of sliding windows available in the sequence.
         Formula: Sequence Length - Window Size + 1
+        :return int: the total number of sliding windows available in the sequence.
         """
         return self.seq_len - self.window_size + 1
-# TODO: docstring, túl hosszú sor
+
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Retrieves the windowed slice of data starting at the given index.
 
-        Args:
-            idx (int): The starting index of the window.
-
-        Returns:
-            Dict[str, torch.Tensor]: A dictionary containing the sliced tensors for X, y, t, and aux_targets.
-                                     Resulting shape for each tensor will be [Window_size, Features].
+        :param int idx: The starting index of the window.
+        :return Dict[str, torch.Tensor]: A dictionary containing the sliced tensors for X, y, t, and aux_targets.
+         Shape for each tensor will be [Window_size, Features].
         """
         start_idx = idx
         end_idx = idx + self.window_size
