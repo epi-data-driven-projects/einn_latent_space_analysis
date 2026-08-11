@@ -61,7 +61,6 @@ class BaseODEModel(nn.Module, ABC):
         # Add epsilon to prevent infinity values at boundaries (0 or 1)
         eps = -1e-12 if target_val > 0.0 else 1e-12
 
-        # Math: 1 / 0.5 * (val - 0) - 1  ---> 2 * val - 1
         inner_val = 2.0 * target_val - 1.0 + eps
 
         # Clip to avoid numerical instability in arctanh

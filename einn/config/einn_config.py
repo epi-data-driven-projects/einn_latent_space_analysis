@@ -7,7 +7,7 @@ import torch
 @dataclass
 class EINNConfig:
     """
-    Configuration dataclass for the EINN model.
+    Configuration dataclass for the EINN.
     Stores hyperparameters, model dimensions, and training settings.
 
     - d_x (int): Number of input features (dimensionality of the observation data).
