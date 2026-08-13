@@ -1,0 +1,5 @@
+data/
+training/
+notebooks/
+.idea
+/venv
