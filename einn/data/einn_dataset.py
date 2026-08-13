@@ -19,7 +19,7 @@ class EINNDataset(Dataset):
         :param torch.Tensor y : the target variable
         :param torch.Tensor t: time
         :param torch.Tensor aux_targets: The ideal trajectories (ODE pre-calibration).
-        :param (int, optional) window_size: Size of the sliding window. If None, uses the full sequence.
+        :param Optional[int] window_size: Size of the sliding window. If None, uses the full sequence.
         :param str device: Device to store the dataset tensors on ('cpu' or 'cuda').
         """
         self.device = torch.device(device)
