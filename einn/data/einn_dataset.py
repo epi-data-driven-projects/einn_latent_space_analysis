@@ -22,6 +22,35 @@ class EINNDataset(Dataset):
         """
         self.device = torch.device(device)
 
+        # Initializing empty tensors
+        self.x = torch.empty(0, device=self.device)
+        self.y = torch.empty(0, device=self.device)
+        self.t = torch.empty(0, device=self.device)
+        self.aux_targets = torch.empty(0, device=self.device)
+
+        # Preparing and loading data
+        self._prepare_data(x=x, y=y, t=t, aux_targets=aux_targets)
+
+        # defining sequence length based on the first dimension
+        self.seq_len = self.x.size(0)
+
+        # If no window size is provided, default to the entire sequence length (1 large window)
+        self.window_size = window_size if window_size is not None else self.seq_len
+
+        # Validation to prevent out-of-bounds slicing errors
+        if self.window_size > self.seq_len:
+            raise ValueError(f"Window size ({self.window_size}) cannot be " + \
+                             f"strictly larger than the sequence length ({self.seq_len}).")
+
+    def _prepare_data(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor, aux_targets: torch.Tensor) -> None:
+        """
+
+        :param x:
+        :param y:
+        :param t:
+        :param aux_targets:
+        :return:
+        """
         # Squeeze out the batch dimension if the user passes tensors in [1, Seq_len, Features] format.
         # This makes the slicing logic in __getitem__ cleaner
         if x.dim() == 3 and x.size(0) == 1:
@@ -37,16 +66,6 @@ class EINNDataset(Dataset):
         self.y = y.detach().float().to(self.device)
         self.t = t.detach().float().to(self.device)
         self.aux_targets = aux_targets.detach().float().to(self.device)
-
-        self.seq_len = self.x.size(0)
-
-        # If no window size is provided, default to the entire sequence length (1 large window)
-        self.window_size = window_size if window_size is not None else self.seq_len
-
-        # Validation to prevent out-of-bounds slicing errors
-        if self.window_size > self.seq_len:
-            raise ValueError(f"Window size ({self.window_size}) cannot be " + \
-                             f"strictly larger than the sequence length ({self.seq_len}).")
 
     def __len__(self) -> int:
         """
