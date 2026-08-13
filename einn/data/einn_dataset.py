@@ -1,5 +1,3 @@
-from typing import Dict, Optional
-
 import torch
 from torch.utils.data import Dataset
 
@@ -10,7 +8,7 @@ class EINNDataset(Dataset):
     """
 
     def __init__(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor,
-                 aux_targets: torch.Tensor, window_size: Optional[int] = None,
+                 aux_targets: torch.Tensor, window_size: int | None = None,
                  device: str = 'cpu'):
         """
         Initializes the dataset, detaches tensors from the computation graph, and moves them to the target device.
