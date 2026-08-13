@@ -15,7 +15,7 @@ class EINNDataset(Dataset):
 
         :param torch.Tensor x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
         :param torch.Tensor y : the target variable
-        :param torch.Tensor t: time
+        :param torch.Tensor t: time vector
         :param torch.Tensor aux_targets: The ideal trajectories (ODE pre-calibration).
         :param Optional[int] window_size: Size of the sliding window. If None, uses the full sequence.
         :param str device: Device to store the dataset tensors on ('cpu' or 'cuda').
@@ -44,12 +44,12 @@ class EINNDataset(Dataset):
 
     def _prepare_data(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor, aux_targets: torch.Tensor) -> None:
         """
+        Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
 
-        :param x:
-        :param y:
-        :param t:
-        :param aux_targets:
-        :return:
+        :param x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
+        :param y: the target variable
+        :param t: time vector.
+        :param aux_targets: The ideal trajectories (ODE pre-calibration).
         """
         # Squeeze out the batch dimension if the user passes tensors in [1, Seq_len, Features] format.
         # This makes the slicing logic in __getitem__ cleaner
