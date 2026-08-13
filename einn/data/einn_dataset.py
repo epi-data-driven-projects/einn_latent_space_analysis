@@ -55,7 +55,7 @@ class EINNDataset(Dataset):
         """
         return self.seq_len - self.window_size + 1
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         """
         Retrieves the windowed slice of data starting at the given index.
 
