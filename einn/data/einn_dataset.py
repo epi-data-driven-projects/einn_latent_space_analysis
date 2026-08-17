@@ -1,5 +1,3 @@
-from typing import Dict, Optional
-
 import torch
 from torch.utils.data import Dataset
 
@@ -10,20 +8,49 @@ class EINNDataset(Dataset):
     """
 
     def __init__(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor,
-                 aux_targets: torch.Tensor, window_size: Optional[int] = None,
+                 aux_targets: torch.Tensor, window_size: int | None = None,
                  device: str = 'cpu'):
         """
         Initializes the dataset, detaches tensors from the computation graph, and moves them to the target device.
 
         :param torch.Tensor x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
         :param torch.Tensor y : the target variable
-        :param torch.Tensor t: time
+        :param torch.Tensor t: time vector
         :param torch.Tensor aux_targets: The ideal trajectories (ODE pre-calibration).
-        :param (int, optional) window_size: Size of the sliding window. If None, uses the full sequence.
+        :param Optional[int] window_size: Size of the sliding window. If None, uses the full sequence.
         :param str device: Device to store the dataset tensors on ('cpu' or 'cuda').
         """
         self.device = torch.device(device)
 
+        # Initializing empty tensors
+        self.x = torch.empty(0, device=self.device)
+        self.y = torch.empty(0, device=self.device)
+        self.t = torch.empty(0, device=self.device)
+        self.aux_targets = torch.empty(0, device=self.device)
+
+        # Preparing and loading data
+        self._prepare_data(x=x, y=y, t=t, aux_targets=aux_targets)
+
+        # defining sequence length based on the first dimension
+        self.seq_len = self.x.size(0)
+
+        # If no window size is provided, default to the entire sequence length (1 large window)
+        self.window_size = window_size if window_size is not None else self.seq_len
+
+        # Validation to prevent out-of-bounds slicing errors
+        if self.window_size > self.seq_len:
+            raise ValueError(f"Window size ({self.window_size}) cannot be " + \
+                             f"strictly larger than the sequence length ({self.seq_len}).")
+
+    def _prepare_data(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor, aux_targets: torch.Tensor):
+        """
+        Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
+
+        :param x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
+        :param y: the target variable
+        :param t: time vector.
+        :param aux_targets: The ideal trajectories (ODE pre-calibration).
+        """
         # Squeeze out the batch dimension if the user passes tensors in [1, Seq_len, Features] format.
         # This makes the slicing logic in __getitem__ cleaner
         if x.dim() == 3 and x.size(0) == 1:
@@ -40,16 +67,6 @@ class EINNDataset(Dataset):
         self.t = t.detach().float().to(self.device)
         self.aux_targets = aux_targets.detach().float().to(self.device)
 
-        self.seq_len = self.x.size(0)
-
-        # If no window size is provided, default to the entire sequence length (1 large window)
-        self.window_size = window_size if window_size is not None else self.seq_len
-
-        # Validation to prevent out-of-bounds slicing errors
-        if self.window_size > self.seq_len:
-            raise ValueError(f"Window size ({self.window_size}) cannot be " + \
-                             f"strictly larger than the sequence length ({self.seq_len}).")
-
     def __len__(self) -> int:
         """
         Formula: Sequence Length - Window Size + 1
@@ -57,7 +74,7 @@ class EINNDataset(Dataset):
         """
         return self.seq_len - self.window_size + 1
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         """
         Retrieves the windowed slice of data starting at the given index.
 
