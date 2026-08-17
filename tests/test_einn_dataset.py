@@ -1,5 +1,4 @@
 import pytest
-
 import torch
 
 from einn.data.einn_dataset import EINNDataset
