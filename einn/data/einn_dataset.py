@@ -42,7 +42,7 @@ class EINNDataset(Dataset):
             raise ValueError(f"Window size ({self.window_size}) cannot be " + \
                              f"strictly larger than the sequence length ({self.seq_len}).")
 
-    def _prepare_data(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor, aux_targets: torch.Tensor) -> None:
+    def _prepare_data(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor, aux_targets: torch.Tensor):
         """
         Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
 
