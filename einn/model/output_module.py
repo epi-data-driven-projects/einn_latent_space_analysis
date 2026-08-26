@@ -41,5 +41,4 @@ class OutputModule(BaseNeuralNetwork):
         :return torch.Tensor: Predicted compartment states. Shape: [Batch, Seq_len, d_s].
         """
 
-        out = self.net(e)
-        return out
+        return self.net(e)
