@@ -20,7 +20,7 @@ class OutputModule(BaseNeuralNetwork):
         super().__init__()
 
         # Deep MLP architecture mapping embeddings to state space
-        # d_e -> 2*d_e -> 2*d_e -> d_e -> d_s
+        # d_e -> 2 * d_e -> 2 * d_e -> d_e -> d_s
         self.net = nn.Sequential(
             nn.Linear(in_features=d_e, out_features=2 * d_e),
             nn.Tanh(),
