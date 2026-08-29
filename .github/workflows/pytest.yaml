@@ -1,9 +1,11 @@
 name: Pytest
 
 on:
-  push:
+  pull_request_review:
     branches:
-      - "**"
+      - main
+    types:
+      - submitted
 
 jobs:
   approved:
@@ -24,7 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -U pytest
-          
+          pip install -e .
 
       - name: Debug Directory Structure
         run: ls -R # Check the directory structure before running tests
