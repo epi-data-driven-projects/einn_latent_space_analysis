@@ -1,16 +1,13 @@
 name: Pytest
 
 on:
-  pull_request_review:
+  push:
     branches:
-      - main
-    types:
-      - submitted
-  workflow_dispatch:
+      - dev/add-einn-dataset
 
 jobs:
-  approved_or_manual:
-    if: github.event_name == 'workflow_dispatch' || github.event.review.state == 'APPROVED'
+  approved:
+    if: github.event.review.state == 'APPROVED'
     runs-on: ubuntu-latest
 
     steps:
