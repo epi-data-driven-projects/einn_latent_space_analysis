@@ -6,8 +6,7 @@ on:
       - dev/add-einn-dataset
 
 jobs:
-  approved:
-    if: github.event.review.state == 'APPROVED'
+  test:
     runs-on: ubuntu-latest
 
     steps:
