@@ -1,11 +1,9 @@
 name: Pytest
 
 on:
-  pull_request_review:
+  push:
     branches:
-      - main
-    types:
-      - submitted
+      - "**"
 
 jobs:
   approved:
