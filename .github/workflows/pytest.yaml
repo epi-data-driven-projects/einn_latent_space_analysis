@@ -6,10 +6,11 @@ on:
       - main
     types:
       - submitted
+  workflow_dispatch:
 
 jobs:
-  approved:
-    if: github.event.review.state == 'APPROVED'
+  approved_or_manual:
+    if: github.event_name == 'workflow_dispatch' || github.event.review.state == 'APPROVED'
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -U pytest
-          pip install -e .
 
       - name: Debug Directory Structure
         run: ls -R # Check the directory structure before running tests
