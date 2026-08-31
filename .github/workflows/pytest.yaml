@@ -3,7 +3,7 @@ name: Pytest
 on:
   push:
     branches:
-      - main
+      - origin/main
 
 jobs:
   test:
