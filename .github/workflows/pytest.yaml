@@ -3,7 +3,7 @@ name: Pytest
 on:
   push:
     branches:
-      - origin/main
+      - dev/add-einn-dataset
 
 jobs:
   test:
