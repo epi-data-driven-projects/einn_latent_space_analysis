@@ -4,6 +4,7 @@ import torch
 from einn.model.time_module import TimeModule
 from einn.model.feature_module import FeatureModule
 
+
 @pytest.fixture
 def time_module() -> TimeModule:
     """
