@@ -1,0 +1,23 @@
+name: Pytest
+
+on:
+  pull_request_review:
+    branches:
+      - main
+    types:
+      - submitted
+
+jobs:
+  approved:
+    if: github.event.review.state == 'APPROVED'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for testing
+        run: docker build -t einn-test-image -f Dockerfile .
+
+      - name: Run tests in Docker
+        run: docker run --rm einn-test-image
