@@ -115,11 +115,9 @@ def test_feature_module_output_shape(feature_module: FeatureModule, base_tensor_
         f"Shape mismatch! Expected {expected_shape}, but got {output.shape}"
 
 
-def test_combined_modules_compatibility(
-    time_module: TimeModule,
-    feature_module: FeatureModule,
-    base_tensor_shapes: dict
-) -> None:
+def test_combined_modules_compatibility(time_module: TimeModule,
+                                        feature_module: FeatureModule,
+                                        base_tensor_shapes: dict) -> None:
     """
     Tests the compatibility of TimeModule and FeatureModule outputs.
     Ensures both modules can process the same inputs and their outputs can be combined.
@@ -143,10 +141,10 @@ def test_combined_modules_compatibility(
         time_output = time_module(t=t_input)
         feature_output = feature_module(x=x_input, t=t_input, mask=mask_input)
 
-    #
+    # Concatenation
     combined_output = torch.cat(tensors=(time_output, feature_output), dim=-1)
 
-    # Az elvárt dimenzió így a két out_dim összege lesz (25 + 25 = 50)
+    # Expected dimension should be the sum of the two out_dim (25  25 = 50)
     expected_shape = (
         base_tensor_shapes["batch_size"],
         base_tensor_shapes["seq_len"],
