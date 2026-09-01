@@ -48,7 +48,7 @@ class FeatureModule(BaseNeuralNetwork):
             batch_first=True  # Inputs and outputs are [Batch, Seq, Features]
         )
         self.attn_layer = nn.MultiheadAttention(
-            embed_dim=self.rrn_out,
+            embed_dim=self.rnn_out,
             num_heads=1,
             dropout=dropout,
             batch_first=True
