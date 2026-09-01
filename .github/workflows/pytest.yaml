@@ -1,9 +1,9 @@
 name: Pytest
 
 on:
-  push:
-    branches:
-      - dev/add-einn-dataset
+  pull_request_review:
+    types:
+      - submitted
 
 jobs:
   test:
