@@ -113,3 +113,45 @@ def test_feature_module_output_shape(feature_module: FeatureModule, base_tensor_
 
     assert output.shape == expected_shape, \
         f"Shape mismatch! Expected {expected_shape}, but got {output.shape}"
+
+
+def test_combined_modules_compatibility(
+    time_module: TimeModule,
+    feature_module: FeatureModule,
+    base_tensor_shapes: dict
+) -> None:
+    """
+    Tests the compatibility of TimeModule and FeatureModule outputs.
+    Ensures both modules can process the same inputs and their outputs can be combined.
+
+    :param TimeModule time_module: Fixture providing the initialized TimeModule.
+    :param FeatureModule feature_module: Fixture providing the initialized FeatureModule.
+    :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    """
+    # Generating input tensors
+    x_input = torch.rand(
+        size=(base_tensor_shapes["batch_size"], base_tensor_shapes["seq_len"], base_tensor_shapes["dim_seq_in"])
+    )
+    t_input = torch.rand(
+        size=(base_tensor_shapes["batch_size"], base_tensor_shapes["seq_len"], 1)
+    )
+    mask_input = torch.ones(
+        size=(base_tensor_shapes["batch_size"], base_tensor_shapes["seq_len"])
+    )
+
+    with torch.no_grad():
+        time_output = time_module(t=t_input)
+        feature_output = feature_module(x=x_input, t=t_input, mask=mask_input)
+
+    #
+    combined_output = torch.cat(tensors=(time_output, feature_output), dim=-1)
+
+    # Az elvárt dimenzió így a két out_dim összege lesz (25 + 25 = 50)
+    expected_shape = (
+        base_tensor_shapes["batch_size"],
+        base_tensor_shapes["seq_len"],
+        base_tensor_shapes["out_dim"] * 2
+    )
+
+    assert combined_output.shape == expected_shape, \
+        f"Combined shape mismatch! Expected {expected_shape}, but got {combined_output.shape}"
