@@ -91,7 +91,7 @@ def test_feature_module_output_shape(feature_module: FeatureModule, base_tensor_
     :param FeatureModule feature_module: Fixture providing the initialized FeatureModule.
     :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
     """
-    # Bemeneti tenzorok generálása
+    # Generating input tensors
     x_input = torch.rand(
         size=(base_tensor_shapes["batch_size"], base_tensor_shapes["seq_len"], base_tensor_shapes["dim_seq_in"])
     )
@@ -143,10 +143,9 @@ def test_combined_modules_compatibility(
         time_output = time_module(t=t_input)
         feature_output = feature_module(x=x_input, t=t_input, mask=mask_input)
 
-    #
+    # Concatenation
     combined_output = torch.cat(tensors=(time_output, feature_output), dim=-1)
-
-    # Az elvárt dimenzió így a két out_dim összege lesz (25 + 25 = 50)
+    # Expected dimension should be the sum of the two out_dim (25 + 25)
     expected_shape = (
         base_tensor_shapes["batch_size"],
         base_tensor_shapes["seq_len"],
