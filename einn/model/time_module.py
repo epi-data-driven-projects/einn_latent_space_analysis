@@ -68,5 +68,5 @@ class TimeModule(BaseNeuralNetwork):
         :return torch.Tensor: Time-based embedding (e_t). Shape: [Batch, Seq_len, out_dim].
         """
         mapped_inputs = self.apply_fourier_mapping(t=t)
-        emb_e = self.net(x=mapped_inputs)
+        emb_e = self.net(mapped_inputs)
         return emb_e
