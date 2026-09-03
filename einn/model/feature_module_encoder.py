@@ -17,7 +17,7 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
             n_layers: int = 1,
             bidirectional: bool = True,
             dropout: float = 0.0
-    ) -> None:
+    ):
         """
         Initializes the Encoder architecture.
 
