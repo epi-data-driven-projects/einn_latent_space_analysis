@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from einn.model.feature_module import FeatureModule
+from einn.model.output_module import OutputModule
 from einn.model.time_module import TimeModule
 
 
@@ -42,6 +43,23 @@ def feature_module() -> FeatureModule:
 
 
 @pytest.fixture
+def output_module(base_tensor_shapes: dict) -> OutputModule:
+    """
+    Fixture that initializes and returns an OutputModule in evaluation mode.
+    The input dimension (d_e) matches the concatenated outputs of the upstream modules.
+
+    :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    :return OutputModule: The initialized OutputModule in evaluation mode.
+    """
+    model = OutputModule(
+        d_e=base_tensor_shapes["d_e"],
+        d_s=base_tensor_shapes["d_s"]
+    )
+    model.eval()
+    return model
+
+
+@pytest.fixture
 def base_tensor_shapes() -> dict:
     """
     Fixture providing common tensor dimensions for shape testing.
@@ -52,7 +70,9 @@ def base_tensor_shapes() -> dict:
         "batch_size": 2,
         "seq_len": 50,
         "dim_seq_in": 10,
-        "out_dim": 25
+        "out_dim": 25,
+        "d_e": 25,  # Same as out_dim
+        "d_s": 5
     }
 
 
