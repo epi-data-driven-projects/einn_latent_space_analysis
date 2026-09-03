@@ -127,7 +127,7 @@ def test_combined_modules_compatibility(
         feature_module: FeatureModule,
         base_tensor_shapes: dict,
         input_tensors: dict
-) -> None:
+):
     """
     Tests the compatibility of TimeModule and FeatureModule outputs.
     Ensures both modules can process the same inputs and their outputs can be combined.
