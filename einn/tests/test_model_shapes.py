@@ -177,3 +177,71 @@ def test_combined_modules_compatibility(
 
     assert combined_output.shape == expected_shape, \
         f"Combined shape mismatch! Expected {expected_shape}, but got {combined_output.shape}"
+
+
+def test_output_module_output_shape(output_module: OutputModule, base_tensor_shapes: dict):
+    """
+    Tests if the OutputModule returns a tensor of the correct shape in a standalone manner.
+    Expected output shape: [Batch, Seq_len, d_s]
+
+    :param OutputModule output_module: Fixture providing the initialized OutputModule.
+    :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    """
+    # Generating a mock combined embedding (e) as input
+    e_input = torch.rand(
+        size=(base_tensor_shapes["batch_size"], base_tensor_shapes["seq_len"], base_tensor_shapes["d_e"])
+    )
+
+    with torch.no_grad():
+        output = output_module(e=e_input)
+
+    expected_shape = (
+        base_tensor_shapes["batch_size"],
+        base_tensor_shapes["seq_len"],
+        base_tensor_shapes["d_s"]
+    )
+
+    assert output.shape == expected_shape, \
+        f"Shape mismatch! Expected {expected_shape}, but got {output.shape}"
+
+
+def test_full_pipeline_shared_mlp(
+        time_module: TimeModule,
+        feature_module: FeatureModule,
+        output_module: OutputModule,
+        base_tensor_shapes: dict,
+        input_tensors: dict
+):
+    """
+    Tests the full pipeline where the OutputModule acts as a shared MLP.
+    It must independently decode both the TimeModule's and FeatureModule's embeddings.
+
+    :param TimeModule time_module: Fixture providing the initialized TimeModule.
+    :param FeatureModule feature_module: Fixture providing the initialized FeatureModule.
+    :param OutputModule output_module: Fixture providing the initialized OutputModule.
+    :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    :param dict input_tensors: Fixture providing the raw input tensors.
+    """
+    with torch.no_grad():
+        time_embedding = time_module(t=input_tensors["t"])
+        feature_embedding = feature_module(
+            x=input_tensors["x"],
+            t=input_tensors["t"],
+            mask=input_tensors["mask"]
+        )
+
+        states_from_time = output_module(e=time_embedding)
+        states_from_feature = output_module(e=feature_embedding)
+
+    # Final expected dimension [Batch, Seq_len, d_s]
+    expected_shape = (
+        base_tensor_shapes["batch_size"],
+        base_tensor_shapes["seq_len"],
+        base_tensor_shapes["d_s"]
+    )
+
+    assert states_from_time.shape == expected_shape, \
+        f"Time pipeline shape mismatch! Expected {expected_shape}, but got {states_from_time.shape}"
+
+    assert states_from_feature.shape == expected_shape, \
+        f"Feature pipeline shape mismatch! Expected {expected_shape}, but got {states_from_feature.shape}"
