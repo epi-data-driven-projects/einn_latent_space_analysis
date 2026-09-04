@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+from einn.model.feature_module import FeatureModule
 from einn.model.time_module import TimeModule
 
 
@@ -22,6 +23,25 @@ def time_module() -> TimeModule:
 
 
 @pytest.fixture
+def feature_module() -> FeatureModule:
+    """
+    Fixture that initializes and returns a FeatureModule in evaluation mode.
+
+    :return FeatureModule: The initialized FeatureModule in evaluation mode.
+    """
+    model = FeatureModule(
+        dim_seq_in=10,
+        rnn_out=40,
+        dim_out=25,
+        n_layers=1,
+        bidirectional=True,
+        dropout=0.0
+    )
+    model.eval()
+    return model
+
+
+@pytest.fixture
 def base_tensor_shapes() -> dict:
     """
     Fixture providing common tensor dimensions for shape testing.
@@ -36,22 +56,35 @@ def base_tensor_shapes() -> dict:
     }
 
 
-def test_time_module_output_shape(time_module: TimeModule, base_tensor_shapes: dict):
+@pytest.fixture
+def input_tensors(base_tensor_shapes: dict) -> dict:
+    """
+    Fixture generating common input tensors (x, t, mask) to avoid code duplication.
+
+    :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    :return dict: Dictionary containing the generated PyTorch tensors.
+    """
+    batch_size = base_tensor_shapes["batch_size"]
+    seq_len = base_tensor_shapes["seq_len"]
+
+    return {
+        "x": torch.rand(size=(batch_size, seq_len, base_tensor_shapes["dim_seq_in"])),
+        "t": torch.rand(size=(batch_size, seq_len, 1)),
+        "mask": torch.ones(size=(batch_size, seq_len))
+    }
+
+
+def test_time_module_output_shape(time_module: TimeModule, base_tensor_shapes: dict, input_tensors: dict):
     """
     Tests if the TimeModule returns a tensor of the correct shape.
     Expected output shape: [Batch, Seq_len, out_dim]
 
     :param TimeModule time_module: Fixture providing the initialized TimeModule.
     :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    :param dict input_tensors: Fixture providing the input tensors.
     """
-    # Generating input tensor (t)
-    t_input = torch.rand(
-        size=(base_tensor_shapes["batch_size"], base_tensor_shapes["seq_len"], 1)
-    )
-
-    # Run without calculating the gradient
     with torch.no_grad():
-        output = time_module(t=t_input)
+        output = time_module(t=input_tensors["t"])
 
     expected_shape = (
         base_tensor_shapes["batch_size"],
@@ -61,3 +94,66 @@ def test_time_module_output_shape(time_module: TimeModule, base_tensor_shapes: d
 
     assert output.shape == expected_shape, \
         f"Shape mismatch! Expected {expected_shape}, but got {output.shape}"
+
+
+def test_feature_module_output_shape(feature_module: FeatureModule, base_tensor_shapes: dict, input_tensors: dict):
+    """
+    Tests if the FeatureModule returns a tensor of the correct shape.
+    Expected output shape: [Batch, Seq_len, dim_out]
+
+    :param FeatureModule feature_module: Fixture providing the initialized FeatureModule.
+    :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    :param dict input_tensors: Fixture providing the input tensors.
+    """
+    with torch.no_grad():
+        output = feature_module(
+            x=input_tensors["x"],
+            t=input_tensors["t"],
+            mask=input_tensors["mask"]
+        )
+
+    expected_shape = (
+        base_tensor_shapes["batch_size"],
+        base_tensor_shapes["seq_len"],
+        base_tensor_shapes["out_dim"]
+    )
+
+    assert output.shape == expected_shape, \
+        f"Shape mismatch! Expected {expected_shape}, but got {output.shape}"
+
+
+def test_combined_modules_compatibility(
+        time_module: TimeModule,
+        feature_module: FeatureModule,
+        base_tensor_shapes: dict,
+        input_tensors: dict
+):
+    """
+    Tests the compatibility of TimeModule and FeatureModule outputs.
+    Ensures both modules can process the same inputs and their outputs can be combined.
+
+    :param TimeModule time_module: Fixture providing the initialized TimeModule.
+    :param FeatureModule feature_module: Fixture providing the initialized FeatureModule.
+    :param dict base_tensor_shapes: Fixture providing common tensor dimensions.
+    :param dict input_tensors: Fixture providing the input tensors.
+    """
+    with torch.no_grad():
+        time_output = time_module(t=input_tensors["t"])
+        feature_output = feature_module(
+            x=input_tensors["x"],
+            t=input_tensors["t"],
+            mask=input_tensors["mask"]
+        )
+
+    # Concatenation
+    combined_output = torch.cat(tensors=(time_output, feature_output), dim=-1)
+
+    # Expected dimension should be the sum of the two out_dim (25 + 25)
+    expected_shape = (
+        base_tensor_shapes["batch_size"],
+        base_tensor_shapes["seq_len"],
+        base_tensor_shapes["out_dim"] * 2
+    )
+
+    assert combined_output.shape == expected_shape, \
+        f"Combined shape mismatch! Expected {expected_shape}, but got {combined_output.shape}"
