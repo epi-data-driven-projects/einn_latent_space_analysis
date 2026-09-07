@@ -68,4 +68,5 @@ class BaseODEModel(nn.Module, ABC):
         clamped_val = torch.clamp(input=val_tensor, min=0.0001, max=0.9999)
         tanh_val = 2.0 * clamped_val - 1.0
 
-        return torch.atanh(input=tanh_val)
+        # Extracting the native Python float from the zero-dimensional tensor
+        return torch.atanh(input=tanh_val).item()
