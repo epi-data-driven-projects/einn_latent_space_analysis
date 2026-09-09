@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 import torch
 
@@ -16,4 +17,4 @@ class ODESolution:
     """
     ds_dt: torch.Tensor
     params: torch.Tensor
-    t: torch.Tensor
+    t: Optional[torch.Tensor] = None
