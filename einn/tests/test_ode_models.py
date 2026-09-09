@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from einn.model.output_module import OutputModule
 from einn.ode.sir_model import SIRModel
+from einn.model.output_module import OutputModule
 from einn.model.time_module import TimeModule
 
 

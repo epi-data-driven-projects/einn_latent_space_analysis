@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from einn.ode.base_ode_model import BaseODEModel
 from einn.model.interface.ode_solution import ODESolution
+from einn.ode.base_ode_model import BaseODEModel
 
 
 class SIRModel(BaseODEModel):
