@@ -67,7 +67,7 @@ def mock_inputs() -> dict:
     }
 
 
-def test_ode_parameter_bounding_extreme_optimizer(ode_context: dict) -> None:
+def test_ode_parameter_bounding_extreme_optimizer(ode_context: dict):
     """
     Simulates a scenario where the optimizer updates the raw parameters to extreme values.
     Ensures the tanh trick successfully bounds the physical parameters exactly between 0 and 1.
