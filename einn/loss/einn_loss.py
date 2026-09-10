@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from einn.config.einn_config import EINNConfig
 from einn.ode.base_ode_model import BaseODEModel
+from einn.model.interface.network_outputs import NetworkOutputs
 from einn.model.interface.phase_context import PhaseContext
 
 
@@ -127,13 +128,13 @@ class EINNLoss(nn.Module):
         """
         return F.mse_loss(input=prediction, target=target)
 
-    def forward(self, phase_context: PhaseContext, network_outputs: dict) -> torch.Tensor:
+    def forward(self, phase_context: PhaseContext, network_outputs: NetworkOutputs) -> torch.Tensor:
         """
         Cascading forward pass that aggregates loss components based on the exact
         incremental phases defined in the original EINN training loop.
 
         :param PhaseContext phase_context: The context object indicating the current phase.
-        :param dict network_outputs: Dictionary containing network predictions and derivatives.
+        :param NetworkOutputs network_outputs: Dataclass containing network predictions and derivatives.
         :return torch.Tensor: The weighted composite loss scalar.
         """
         total_loss = torch.tensor(data=0.0, dtype=torch.float32, device=phase_context.t.device)
@@ -141,13 +142,13 @@ class EINNLoss(nn.Module):
         # Phase 1: Train Time Module (Solo Data, Aux & Monotonicity)
         if phase_context.phase_num >= 1:
             total_loss += self.weights['data_T'] * self.calc_data_loss(
-                states=network_outputs['s_t'], targets=phase_context.y
+                states=network_outputs.s_t, targets=phase_context.y
             )
             total_loss += self.weights['aux'] * self.calc_aux_loss(
-                states=network_outputs['s_t'], aux_targets=phase_context.aux_targets
+                states=network_outputs.s_t, aux_targets=phase_context.aux_targets
             )
             total_loss += self.weights['mono'] * self.calc_monotonicity_loss(
-                dS_dt=network_outputs['dS_dt_T_ode'],
+                dS_dt=network_outputs.dS_dt_T_ode,
                 inc_indices=self.mono_inc_indices,
                 dec_indices=self.mono_dec_indices
             )
@@ -155,34 +156,34 @@ class EINNLoss(nn.Module):
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:
             total_loss += self.weights['ode_T'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs['ds_dt_T_nn'], ds_dt_ode=network_outputs['ds_dt_T_ode']
+                ds_dt_nn=network_outputs.ds_dt_T_nn, ds_dt_ode=network_outputs.ds_dt_T_ode
             )
-            total_loss += self.weights['ode_future'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs['ds_dt_future_T_nn'], ds_dt_ode=network_outputs['ds_dt_future_T_ode']
+            total_loss += self.weights['ode_future_T'] * self.calc_ode_loss(
+                ds_dt_nn=network_outputs.ds_dt_future_T_nn, ds_dt_ode=network_outputs.ds_dt_future_T_ode
             )
             total_loss += self.weights['param'] * self.calc_parameter_smoothness_loss(
-                params=network_outputs['params']
+                params=network_outputs.params
             )
 
         # Phase 3: Add Feature Module (Data & Knowledge Distillation)
         if phase_context.phase_num >= 3:
             total_loss += self.weights['data_F'] * self.calc_data_loss(
-                states=network_outputs['s_t_F'], targets=phase_context.y
+                states=network_outputs.s_t_F, targets=phase_context.y
             )
             total_loss += self.weights['kd_target'] * self.calc_knowledge_distillation_loss(
-                target=network_outputs['s_t'].detach(), prediction=network_outputs['s_t_F']
+                target=network_outputs.s_t.detach(), prediction=network_outputs.s_t_F
             )
             total_loss += self.weights['kd_emb'] * self.calc_knowledge_distillation_loss(
-                target=network_outputs['e_t'].detach(), prediction=network_outputs['e_t_F']
+                target=network_outputs.e_t.detach(), prediction=network_outputs.e_t_F
             )
 
         # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
             total_loss += self.weights['ode_F'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs['ds_dt_F_nn'], ds_dt_ode=network_outputs['ds_dt_F_ode']
+                ds_dt_nn=network_outputs.ds_dt_F_nn, ds_dt_ode=network_outputs.ds_dt_F_ode
             )
-            total_loss += self.weights['ode_future'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs['ds_dt_future_F_nn'], ds_dt_ode=network_outputs['ds_dt_future_F_ode']
+            total_loss += self.weights['ode_future_F'] * self.calc_ode_loss(
+                ds_dt_nn=network_outputs.ds_dt_future_F_nn, ds_dt_ode=network_outputs.ds_dt_future_F_ode
             )
 
         return total_loss
