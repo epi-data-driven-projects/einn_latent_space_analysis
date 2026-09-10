@@ -13,12 +13,12 @@ class EINNConfig:
     :param int d_e: latent embedding dimension
     :param int d_s: number of ODE compartment states
     :param int d_p: number of physical parameters
-    :param int time_mapping_size:
-    :param float time_scale:
-    :param int feature_rnn_out:
-    :param int feature_n_layers:
-    :param bool feature_bidirectional:
-    :param float feature_dropout:
+    :param int time_mapping_size: frequency mapping size for TimeModule
+    :param float time_scale: variance scale for the TimeModule frequencies
+    :param int feature_rnn_out: hidden size for the FeatureModule RNNs
+    :param int feature_n_layers: number of RNN layers in FeatureModule
+    :param bool feature_bidirectional: whether the Encoder RNN is bidirectional
+    :param float feature_dropout: dropout probability for FeatureModule
     :param float learning_rate: learning rate for optimizers
     :param int epochs_per_phase: number of training epochs per phase
     :param int future_steps: number of steps for future prediction
