@@ -124,4 +124,4 @@ def test_neural_to_ode_full_pipeline(
     expected_zeros = torch.zeros_like(input=ds_dt_sum)
 
     assert torch.allclose(input=ds_dt_sum, other=expected_zeros, atol=1e-5), \
-        "Conservation of mass failed! The sum of SIR derivatives should be exactly 0."
+        "The closed system of equations is violated if the sum of derivatives is not 0."
