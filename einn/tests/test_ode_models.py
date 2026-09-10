@@ -1,23 +1,29 @@
 import pytest
 import torch
 
+from einn.ode.seirm_model import SEIRMModel
 from einn.ode.sir_model import SIRModel
 from einn.model.output_module import OutputModule
 from einn.model.time_module import TimeModule
 
 
-@pytest.fixture(params=["SIR"])
+@pytest.fixture(params=["SIR", "SEIRM"])
 def ode_context(request: pytest.FixtureRequest) -> dict:
     """
-    Parameterized fixture providing ODE models dynamically.
+    Parameterized fixture providing both ODE models dynamically.
     Returns a dictionary with the initialized model, its name, and the number of states (d_s).
 
     :param pytest.FixtureRequest request: PyTest request object for parameterization.
     :return dict: Dictionary containing model metadata and the initialized instance.
     """
-    model = SIRModel()
-    model.init_params(param_dict={"beta": 0.3, "gamma": 0.1})
-    return {"name": "SIR", "model": model, "d_s": 3}
+    if request.param == "SIR":
+        model = SIRModel()
+        model.init_params(param_dict={"beta": 0.3, "gamma": 0.1})
+        return {"name": "SIR", "model": model, "d_s": 3}
+    else:
+        model = SEIRMModel(population_n=1.0)
+        model.init_params(param_dict={"beta": 0.3, "alpha": 0.2, "gamma": 0.1, "mu": 0.05})
+        return {"name": "SEIRM", "model": model, "d_s": 5}
 
 
 @pytest.fixture
@@ -95,7 +101,7 @@ def test_neural_to_ode_full_pipeline(
     """
     Tests the actual EINN use case:
     1. Neural networks predict latent states.
-    2. OutputModule decodes them into physical compartments (e.g.: S, I, R).
+    2. OutputModule decodes them into physical compartments (S, I, R or S, E, I, R, M).
     3. The ODE model calculates the time derivatives from these predicted compartments.
 
     :param TimeModule time_module: Fixture providing the TimeModule.
