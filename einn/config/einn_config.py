@@ -13,6 +13,12 @@ class EINNConfig:
     :param int d_e: latent embedding dimension
     :param int d_s: number of ODE compartment states
     :param int d_p: number of physical parameters
+    :param int time_mapping_size:
+    :param float time_scale:
+    :param int feature_rnn_out:
+    :param int feature_n_layers:
+    :param bool feature_bidirectional:
+    :param float feature_dropout:
     :param float learning_rate: learning rate for optimizers
     :param int epochs_per_phase: number of training epochs per phase
     :param int future_steps: number of steps for future prediction
@@ -26,6 +32,14 @@ class EINNConfig:
     d_e: int = 20
     d_s: int = 5
     d_p: int = 4
+
+    time_mapping_size: int = 20
+    time_scale: float = 1.0
+
+    feature_rnn_out: int = 40
+    feature_n_layers: int = 1
+    feature_bidirectional: bool = True
+    feature_dropout: float = 0.0
 
     learning_rate: float = 0.001
     epochs_per_phase: int = 1000
