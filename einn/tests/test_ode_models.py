@@ -10,7 +10,7 @@ from einn.model.time_module import TimeModule
 @pytest.fixture(params=["SIR", "SEIRM"])
 def ode_context(request: pytest.FixtureRequest) -> dict:
     """
-    Parameterized fixture providing both SIR and SEIRM models dynamically.
+    Parameterized fixture providing both ODE models dynamically.
     Returns a dictionary with the initialized model, its name, and the number of states (d_s).
 
     :param pytest.FixtureRequest request: PyTest request object for parameterization.
