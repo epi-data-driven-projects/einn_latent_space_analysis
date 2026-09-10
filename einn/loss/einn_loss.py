@@ -157,7 +157,7 @@ class EINNLoss(nn.Module):
             total_loss += self.weights['ode_T'] * self.calc_ode_loss(
                 ds_dt_nn=network_outputs['ds_dt_T_nn'], ds_dt_ode=network_outputs['ds_dt_T_ode']
             )
-            total_loss += self.weights['ode_future_T'] * self.calc_ode_loss(
+            total_loss += self.weights['ode_future'] * self.calc_ode_loss(
                 ds_dt_nn=network_outputs['ds_dt_future_T_nn'], ds_dt_ode=network_outputs['ds_dt_future_T_ode']
             )
             total_loss += self.weights['param'] * self.calc_parameter_smoothness_loss(
@@ -181,7 +181,7 @@ class EINNLoss(nn.Module):
             total_loss += self.weights['ode_F'] * self.calc_ode_loss(
                 ds_dt_nn=network_outputs['ds_dt_F_nn'], ds_dt_ode=network_outputs['ds_dt_F_ode']
             )
-            total_loss += self.weights['ode_future_F'] * self.calc_ode_loss(
+            total_loss += self.weights['ode_future'] * self.calc_ode_loss(
                 ds_dt_nn=network_outputs['ds_dt_future_F_nn'], ds_dt_ode=network_outputs['ds_dt_future_F_ode']
             )
 
