@@ -76,28 +76,28 @@ class EINNLoss(nn.Module):
 
     @staticmethod
     def calc_monotonicity_loss(
-            dS_dt: torch.Tensor, inc_indices: list, dec_indices: list
+            ds_dt: torch.Tensor, inc_indices: list, dec_indices: list
     ) -> torch.Tensor:
         """
         Applies a squared asymmetric ReLU penalty to enforce monotonic compartments.
         Penalizes when decreasing states (S) have positive derivatives, and when
         increasing states (R, M) have negative derivatives.
 
-        :param torch.Tensor dS_dt: Analytical or empirical time derivative. Shape: [Batch, Seq_len, d_s].
+        :param torch.Tensor ds_dt: Analytical or empirical time derivative. Shape: [Batch, Seq_len, d_s].
         :param list inc_indices: List of indices that must increase.
         :param list dec_indices: List of indices that must decrease.
         :return torch.Tensor: Monotonicity penalty scalar.
         """
-        penalty = torch.tensor(data=0.0, dtype=torch.float32, device=dS_dt.device)
+        penalty = torch.tensor(data=0.0, dtype=torch.float32, device=ds_dt.device)
 
         # Increasing compartments (e.g., R, M): penalty if derivative is negative
         for idx in inc_indices:
-            val = -dS_dt[:, :, idx]
+            val = -ds_dt[:, :, idx]
             penalty += torch.mean(input=(val * torch.relu(input=val)) ** 2)
 
         # Decreasing compartments (e.g., S): penalty if derivative is positive
         for idx in dec_indices:
-            val = dS_dt[:, :, idx]
+            val = ds_dt[:, :, idx]
             penalty += torch.mean(input=(val * torch.relu(input=val)) ** 2)
 
         return penalty
@@ -148,7 +148,7 @@ class EINNLoss(nn.Module):
                 states=network_outputs.s_t, aux_targets=phase_context.aux_targets
             )
             total_loss += self.weights['mono'] * self.calc_monotonicity_loss(
-                dS_dt=network_outputs.dS_dt_T_ode,
+                ds_dt=network_outputs.ds_dt_T_ode,
                 inc_indices=self.mono_inc_indices,
                 dec_indices=self.mono_dec_indices
             )
