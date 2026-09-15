@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from einn.config.einn_config import EINNConfig
+from einn.config.einn_train_config import EINNTrainConfig
 from einn.ode.base_ode_model import BaseODEModel
 from einn.model.interface.network_outputs import NetworkOutputs
 from einn.model.interface.phase_context import PhaseContext
@@ -13,11 +13,11 @@ class EINNLoss(nn.Module):
     Computes the composite loss for the EINN architecture.
     """
 
-    def __init__(self, config: EINNConfig, ode_model: BaseODEModel, model_type: str):
+    def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel, model_type: str):
         """
         Initializes the EINNLoss module.
 
-        :param EINNConfig config: The configuration object containing loss weights.
+        :param EINNTrainConfig config: The configuration object containing loss weights.
         :param BaseODEModel ode_model: The epidemiological ODE model.
         :param str model_type: Type of ODE model ('SIR' or 'SEIRM') to determine monotonicity rules.
         """
