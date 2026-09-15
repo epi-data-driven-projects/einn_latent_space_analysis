@@ -113,9 +113,9 @@ def test_builder_seed_reproducibility(base_config: EINNConfig, base_calibration:
         config=base_config, param_calibration=base_calibration, model_type="SIR", seed=99
     )
 
-    b_matrix_42_a = models_seed_42_a.time_module.B
-    b_matrix_42_b = models_seed_42_b.time_module.B
-    b_matrix_99 = models_seed_99.time_module.B
+    b_matrix_42_a = models_seed_42_a.time_module.b_gauss
+    b_matrix_42_b = models_seed_42_b.time_module.b_gauss
+    b_matrix_99 = models_seed_99.time_module.b_gauss
 
     assert torch.equal(input=b_matrix_42_a, other=b_matrix_42_b), \
         "Builder failed reproducibility! Models with the same seed must have identical initializations."
