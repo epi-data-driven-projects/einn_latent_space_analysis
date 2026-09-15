@@ -11,19 +11,22 @@ from einn.model.time_module import TimeModule
 def ode_context(request: pytest.FixtureRequest) -> dict:
     """
     Parameterized fixture providing both ODE models dynamically.
-    Returns a dictionary with the initialized model, its name, and the number of states (d_s).
+    Returns a dictionary with the initialized model, its name, the number of states (d_s),
+    the number of parameters (d_p), and the expected initial parameter values.
 
     :param pytest.FixtureRequest request: PyTest request object for parameterization.
     :return dict: Dictionary containing model metadata and the initialized instance.
     """
     if request.param == "SIR":
         model = SIRModel()
-        model.init_params(param_dict={"beta": 0.3, "gamma": 0.1})
-        return {"name": "SIR", "model": model, "d_s": 3}
+        expected = {"beta": 0.3, "gamma": 0.1}
+        model.init_params(param_dict=expected)
+        return {"name": "SIR", "model": model, "d_s": 3, "d_p": 2, "expected": expected}
     else:
         model = SEIRMModel(population_n=1.0)
-        model.init_params(param_dict={"beta": 0.3, "alpha": 0.2, "gamma": 0.1, "mu": 0.05})
-        return {"name": "SEIRM", "model": model, "d_s": 5}
+        expected = {"beta": 0.3, "alpha": 0.2, "gamma": 0.1, "mu": 0.05}
+        model.init_params(param_dict=expected)
+        return {"name": "SEIRM", "model": model, "d_s": 5, "d_p": 4, "expected": expected}
 
 
 @pytest.fixture
@@ -67,29 +70,55 @@ def mock_inputs() -> dict:
     }
 
 
-def test_ode_parameter_bounding_extreme_optimizer(ode_context: dict):
+def test_ode_parameter_initialization(ode_context: dict):
     """
-    Simulates a scenario where the optimizer updates the raw parameters to extreme values.
-    Ensures the tanh trick successfully bounds the physical parameters exactly between 0 and 1.
+    Tests if all specific parameters for the given model (SIR or SEIRM)
+    are properly initialized and scaled to their expected values.
 
     :param dict ode_context: Fixture providing the ODE model context.
     """
     model = ode_context["model"]
-
-    # Manually setting extreme raw values to simulate optimizer overshoot for the first two params
-    with torch.no_grad():
-        model.raw_params[0] = 50.0   # Extremely high
-        model.raw_params[1] = -50.0  # Extremely low
+    expected_params = ode_context["expected"]
+    d_p = ode_context["d_p"]
 
     scaled_params = model.get_scaled_params(detach=True)
 
-    assert torch.allclose(
-        input=scaled_params[0], other=torch.tensor(data=1.0, dtype=torch.float32)
-    ), f"{ode_context['name']}: Parameter 0 did not properly bound to the maximum limit (1.0)."
+    assert scaled_params.shape[0] == d_p, \
+        f"{ode_context['name']} expected {d_p} parameters, got {scaled_params.shape[0]}."
 
-    assert torch.allclose(
-        input=scaled_params[1], other=torch.tensor(data=0.0, dtype=torch.float32)
-    ), f"{ode_context['name']}: Parameter 1 did not properly bound to the minimum limit (0.0)."
+    for i, (param_name, expected_val) in enumerate(expected_params.items()):
+        assert torch.allclose(
+            input=scaled_params[i],
+            other=torch.tensor(data=expected_val, dtype=torch.float32),
+            atol=1e-4
+        ), f"{ode_context['name']} parameter '{param_name}' mismatch!"
+
+
+def test_ode_parameter_bounding_extreme_optimizer(ode_context: dict):
+    """
+    Simulates a scenario where the optimizer updates the raw parameters to extreme values.
+    Ensures the tanh trick successfully bounds all physical parameters exactly between 0 and 1.
+
+    :param dict ode_context: Fixture providing the ODE model context.
+    """
+    model = ode_context["model"]
+    d_p = ode_context["d_p"]
+
+    # Manually setting extreme raw values to simulate optimizer overshoot for all params dynamically
+    with torch.no_grad():
+        for i in range(d_p):
+            if i % 2 == 0:
+                model.raw_params[i] = 50.0  # Extremely high -> should bound to 1.0
+            else:
+                model.raw_params[i] = -50.0  # Extremely low -> should bound to 0.0
+
+    scaled_params = model.get_scaled_params(detach=True)
+
+    for i in range(d_p):
+        expected_val = 1.0 if i % 2 == 0 else 0.0
+        assert torch.allclose(
+            input=scaled_params[i], other=torch.tensor(data=expected_val, dtype=torch.float32)
+        ), f"{ode_context['name']}: Parameter {i} did not properly bound to {expected_val}."
 
 
 def test_neural_to_ode_full_pipeline(
