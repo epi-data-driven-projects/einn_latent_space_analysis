@@ -97,14 +97,14 @@ def test_ode_parameter_initialization(ode_context: dict):
 def test_ode_parameter_bounding_extreme_optimizer(ode_context: dict):
     """
     Simulates a scenario where the optimizer updates the raw parameters to extreme values.
-    Ensures the tanh trick successfully bounds ALL physical parameters exactly between 0 and 1.
+    Ensures the tanh trick successfully bounds all physical parameters exactly between 0 and 1.
 
     :param dict ode_context: Fixture providing the ODE model context.
     """
     model = ode_context["model"]
     d_p = ode_context["d_p"]
 
-    # Manually setting extreme raw values to simulate optimizer overshoot for ALL params dynamically
+    # Manually setting extreme raw values to simulate optimizer overshoot for all params dynamically
     with torch.no_grad():
         for i in range(d_p):
             if i % 2 == 0:
