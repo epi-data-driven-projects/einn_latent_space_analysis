@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class EINNModelConfig:
     """
     Configuration data class for the EINN neural network architectures and ODE dimensions.
-    Contains:
+
     :param int d_x: dimensionality of input data features
     :param int d_e: latent embedding dimension
     :param int d_s: number of ODE compartment states
