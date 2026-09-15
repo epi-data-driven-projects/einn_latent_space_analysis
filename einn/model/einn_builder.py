@@ -18,10 +18,10 @@ class EINNBuilder:
 
     @staticmethod
     def build_einn(
-        model_config: EINNModelConfig, 
+        model_config: EINNModelConfig,
         train_config: EINNTrainConfig,
-        param_calibration: dict, 
-        model_type: str = "SEIRM", 
+        param_calibration: dict,
+        model_type: str = "SEIRM",
         population_n: float | None = 1.0,
         seed: int = 42
     ) -> EINNModels:
