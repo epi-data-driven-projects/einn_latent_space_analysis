@@ -89,8 +89,7 @@ class EINNForwardEngine:
 
         # Phases 1-4: Time Module Forward and Derivatives
         e_t_full = models.time_module(t=t_grad)
-        raw_s_t_full = models.output_module(e=e_t_full)
-        s_t_full = torch.sigmoid(input=raw_s_t_full)
+        s_t_full = models.output_module(e=e_t_full)
 
         ds_dt_t_nn_full = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_grad)
         ode_solution_full = models.ode_model.get_derivatives(states=s_t_full, detach_params=False)
@@ -111,13 +110,13 @@ class EINNForwardEngine:
         else:
             out.params = ode_solution_full.params
 
-        # Phases 2-4: Future Time Module Derivatives
+        # Phases 2-4: future Time Module derivatives
         if context.phase_num >= 2:
             # Slicing the future steps into NetworkOutputs
             out.ds_dt_future_T_nn = ds_dt_t_nn_full[:, past_steps:, :]
             out.ds_dt_future_T_ode = ds_dt_t_ode_full[:, past_steps:, :]
 
-        # Phases 3-4: Feature Module Forward
+        # Phases 3-4: Feature Module forward
         if context.phase_num >= 3:
             # Feature module requires x, t, and mask
             # It inherently decodes the entire sequence (past + future) provided in t_grad
