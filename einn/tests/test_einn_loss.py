@@ -23,7 +23,7 @@ def loss_calculator_seirm(base_train_config: EINNTrainConfig) -> EINNLoss:
     return EINNLoss(config=base_train_config, ode_model=None, model_type="SEIRM")
 
 
-def test_monotonicity_loss_penalties(loss_calculator_seirm: EINNLoss) -> None:
+def test_monotonicity_loss_penalties(loss_calculator_seirm: EINNLoss):
     """
     Tests if the asymmetric squared ReLU correctly penalizes violating derivatives.
     For SEIRM: S (idx 0) must decrease, R (idx 3) and M (idx 4) must increase.
@@ -46,7 +46,7 @@ def test_monotonicity_loss_penalties(loss_calculator_seirm: EINNLoss) -> None:
         "Monotonicity penalty calculated incorrectly."
 
 
-def test_parameter_smoothness_loss(loss_calculator_seirm: EINNLoss) -> None:
+def test_parameter_smoothness_loss(loss_calculator_seirm: EINNLoss):
     """
     Tests if the smoothness loss accurately calculates the squared differences between consecutive steps.
     """
@@ -62,7 +62,7 @@ def test_parameter_smoothness_loss(loss_calculator_seirm: EINNLoss) -> None:
         "Smoothness loss calculated incorrectly."
 
 
-def test_forward_phase_routing(loss_calculator_seirm: EINNLoss) -> None:
+def test_forward_phase_routing(loss_calculator_seirm: EINNLoss):
     """
     Tests if the cascading forward pass correctly aggregates active losses
     when executing the final phase (Phase 4), strictly using the NetworkOutputs dataclass.
@@ -101,7 +101,7 @@ def test_forward_phase_routing(loss_calculator_seirm: EINNLoss) -> None:
     assert not torch.isnan(input=loss), "Loss computation resulted in NaN."
 
 
-def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig) -> None:
+def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig):
     """
     Advanced combined test: Verifies that loss weights are correctly applied and
     that the cascading phase logic perfectly accumulates the expected losses.
@@ -135,7 +135,7 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
         "Phase 1 accumulated loss does not match the configured weights."
 
 
-def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig) -> None:
+def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig):
     """
     Advanced architectural test: Ensures that SIR and SEIRM models apply
     monotonicity penalties to entirely different compartments based on their physics.
@@ -160,7 +160,7 @@ def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig) -
     assert seirm_penalty.item() == 0.0, "SEIRM incorrectly penalized the Infected compartment."
 
 
-def test_parameter_smoothness_edge_case(loss_calculator_seirm: EINNLoss) -> None:
+def test_parameter_smoothness_edge_case(loss_calculator_seirm: EINNLoss):
     """
     Edge case test: Ensures that parameter smoothness loss safely returns 0.0
     without crashing when the sequence length is 1.
