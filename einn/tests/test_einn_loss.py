@@ -11,6 +11,8 @@ from einn.model.interface.phase_context import PhaseContext
 def base_train_config() -> EINNTrainConfig:
     """
     Fixture providing a base training configuration on CPU.
+
+    :return EINNTrainConfig: Training configuration instance.
     """
     return EINNTrainConfig(device='cpu')
 
@@ -19,6 +21,9 @@ def base_train_config() -> EINNTrainConfig:
 def loss_calculator_seirm(base_train_config: EINNTrainConfig) -> EINNLoss:
     """
     Fixture providing an initialized EINNLoss for the SEIRM model.
+
+    :param EINNTrainConfig base_train_config: The base training configuration fixture.
+    :return EINNLoss: Initialized loss calculator for SEIRM.
     """
     return EINNLoss(config=base_train_config, ode_model=None, model_type="SEIRM")
 
@@ -27,6 +32,8 @@ def test_monotonicity_loss_penalties(loss_calculator_seirm: EINNLoss):
     """
     Tests if the asymmetric squared ReLU correctly penalizes violating derivatives.
     For SEIRM: S (idx 0) must decrease, R (idx 3) and M (idx 4) must increase.
+
+    :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
     """
     # Test case: S is improperly increasing (+2.0), R is improperly decreasing (-3.0), M is valid (0.0)
     ds_dt = torch.tensor(data=[[[2.0, 0.0, 0.0, -3.0, 0.0]]], dtype=torch.float32)
@@ -49,6 +56,8 @@ def test_monotonicity_loss_penalties(loss_calculator_seirm: EINNLoss):
 def test_parameter_smoothness_loss(loss_calculator_seirm: EINNLoss):
     """
     Tests if the smoothness loss accurately calculates the squared differences between consecutive steps.
+
+    :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
     """
     params = torch.tensor(data=[[[0.1], [0.5], [0.3]]], dtype=torch.float32)
 
@@ -66,6 +75,8 @@ def test_forward_phase_routing(loss_calculator_seirm: EINNLoss):
     """
     Tests if the cascading forward pass correctly aggregates active losses
     when executing the final phase (Phase 4), strictly using the NetworkOutputs dataclass.
+
+    :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
     """
     mock_tensor = torch.zeros(size=(1, 5, 5))
     mock_params = torch.zeros(size=(1, 5, 4))
@@ -105,6 +116,8 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
     """
     Advanced combined test: Verifies that loss weights are correctly applied and
     that the cascading phase logic perfectly accumulates the expected losses.
+
+    :param EINNTrainConfig base_train_config: The training configuration fixture.
     """
     base_train_config.loss_weights = {
         'data_T': 2.0, 'aux': 3.0, 'mono': 0.0, 'ode_T': 0.0, 'ode_future_T': 0.0,
@@ -139,6 +152,8 @@ def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig):
     """
     Advanced architectural test: Ensures that SIR and SEIRM models apply
     monotonicity penalties to entirely different compartments based on their physics.
+
+    :param EINNTrainConfig base_train_config: The training configuration fixture.
     """
     loss_sir = EINNLoss(config=base_train_config, ode_model=None, model_type="SIR")
     loss_seirm = EINNLoss(config=base_train_config, ode_model=None, model_type="SEIRM")
@@ -164,6 +179,8 @@ def test_parameter_smoothness_edge_case(loss_calculator_seirm: EINNLoss):
     """
     Edge case test: Ensures that parameter smoothness loss safely returns 0.0
     without crashing when the sequence length is 1.
+
+    :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
     """
     # [Batch=1, Seq_len=1, d_p=4]
     params_seq_1 = torch.tensor(data=[[[0.5, 0.2, 0.1, 0.05]]], dtype=torch.float32)
