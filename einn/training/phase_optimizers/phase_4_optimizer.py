@@ -5,7 +5,7 @@ import torch
 from einn.training.base_phase_optimizer import BasePhaseOptimizer
 
 
-class PhaseFourOptimizer(BasePhaseOptimizer):
+class Phase4Optimizer(BasePhaseOptimizer):
     """
     Optimizer for Phase 4: 'only out layer + ode params' (Gradient Trick).
     Updates: Output Layer + ODE Params.
