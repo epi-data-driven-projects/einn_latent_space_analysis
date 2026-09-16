@@ -13,6 +13,8 @@ from einn.training.einn_forward_engine import EINNForwardEngine
 def engine() -> EINNForwardEngine:
     """
     Fixture providing the EINNForwardEngine initialized with a base CPU configuration.
+
+    :return EINNForwardEngine: An initialized instance of the forward engine.
     """
     config = EINNTrainConfig(device='cpu')
     return EINNForwardEngine(train_config=config)
@@ -22,6 +24,8 @@ def engine() -> EINNForwardEngine:
 def initialized_models() -> EINNModels:
     """
     Fixture providing fully initialized neural networks and ODE model (SEIRM).
+
+    :return EINNModels: Dataclass containing the instantiated model components.
     """
     model_config = EINNModelConfig(d_x=5, d_e=10, d_s=5, d_p=4, feature_n_layers=1)
     train_config = EINNTrainConfig(device='cpu')
@@ -40,6 +44,8 @@ def test_empirical_derivative(engine: EINNForwardEngine):
     """
     Verifies the _compute_empirical_derivatives method.
     If y = 3 * t^2, then dy/dt = 6 * t.
+
+    :param EINNForwardEngine engine: Fixture providing the execution engine.
     """
     # [Batch=1, Seq=2, Features=1]
     t = torch.tensor([[[2.0], [3.0]]], requires_grad=True)
@@ -63,6 +69,8 @@ def test_feature_gradient_trick(engine: EINNForwardEngine):
     Let state s = 3 * e^2. Then ds/de = 6 * e.
     By chain rule, ds/dt = ds/de * de/dt = (6 * e) * 2 = 12 * e.
     If we evaluate at e = 4.0, ds/dt should be 48.0.
+
+    :param EINNForwardEngine engine: Fixture providing the execution engine.
     """
     # Mock de/dt = 2.0
     de_dt = torch.tensor([[[2.0]]])
@@ -88,6 +96,9 @@ def test_feature_gradient_trick(engine: EINNForwardEngine):
 def test_forward_slicing_phase_2(engine: EINNForwardEngine, initialized_models):
     """
     Verifies if the Engine correctly slices a unified time tensor into past and future chunks when processing Phase 2.
+
+    :param EINNForwardEngine engine: Fixture providing the execution engine.
+    :param EINNModels initialized_models: Fixture providing the built models.
     """
     past_steps = 10
     future_steps = 5
@@ -125,6 +136,9 @@ def test_forward_slicing_phase_2(engine: EINNForwardEngine, initialized_models):
 def test_forward_full_pipeline_phase_4(engine: EINNForwardEngine, initialized_models):
     """
     Executes the most complex phase (4), ensuring all modules, the gradient trick, and slicing work well
+
+    :param EINNForwardEngine engine: Fixture providing the execution engine.
+    :param EINNModels initialized_models: Fixture providing the built models.
     """
     past_steps = 7
     future_steps = 3
