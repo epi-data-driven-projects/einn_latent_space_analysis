@@ -3,8 +3,8 @@ import torch
 
 from einn.config.einn_train_config import EINNTrainConfig
 from einn.loss.einn_loss import EINNLoss
-from einn.model.interface.phase_context import PhaseContext
 from einn.model.interface.network_outputs import NetworkOutputs
+from einn.model.interface.phase_context import PhaseContext
 
 
 @pytest.fixture
