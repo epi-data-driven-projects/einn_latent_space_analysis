@@ -83,7 +83,7 @@ class EINNLoss(nn.Module):
         Penalizes when decreasing states (S) have positive derivatives, and when
         increasing states (R, M) have negative derivatives.
 
-        :param torch.Tensor ds_dt: Analytical or empirical time derivative. Shape: [Batch, Seq_len, d_s].
+        :param torch.Tensor ds_dt: Time derivative of all the states Shape: [Batch, Seq_len, d_s].
         :param list inc_indices: List of indices that must increase.
         :param list dec_indices: List of indices that must decrease.
         :return torch.Tensor: Monotonicity penalty scalar.
