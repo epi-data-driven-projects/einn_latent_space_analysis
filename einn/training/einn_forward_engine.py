@@ -8,8 +8,8 @@ from einn.model.interface.network_outputs import NetworkOutputs
 class EINNForwardEngine:
     """
     Core execution engine for the EINN architecture.
-    Responsible for routing data through the Time, Feature, and Output modules,
-    computing empirical and analytical derivatives, and applying the gradient trick.
+    Responsible for routing data through the Time, Feature, and Output modules, computing empirical and
+    analytical derivatives, and applying the gradient trick.
     """
 
     def __init__(self, train_config: EINNTrainConfig):
