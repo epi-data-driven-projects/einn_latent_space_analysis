@@ -87,19 +87,19 @@ class EINNForwardEngine:
         # t_grad covers the ENTIRE sequence (past + future steps)
         t_grad = context.t.clone().detach().requires_grad_(True)
 
-        # Phases 1-4: Time Module Forward and Derivatives
+        # Phases 1-4: Time Module forward and derivatives
         e_t_full = models.time_module(t=t_grad)
         s_t_full = models.output_module(e=e_t_full)
 
-        ds_dt_t_nn_full = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_grad)
+        ds_t_dt_nn_full = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_grad)
         ode_solution_full = models.ode_model.get_derivatives(states=s_t_full, detach_params=False)
-        ds_dt_t_ode_full = ode_solution_full.ds_dt
+        ds_t_dt_ode_full = ode_solution_full.ds_dt
 
         # Slicing the past steps into NetworkOutputs
         out.e_t = e_t_full[:, :past_steps, :]
         out.s_t = s_t_full[:, :past_steps, :]
-        out.ds_dt_T_nn = ds_dt_t_nn_full[:, :past_steps, :]
-        out.ds_dt_T_ode = ds_dt_t_ode_full[:, :past_steps, :]
+        out.ds_dt_T_nn = ds_t_dt_nn_full[:, :past_steps, :]
+        out.ds_dt_T_ode = ds_t_dt_ode_full[:, :past_steps, :]
 
         # If the ODE model uses global, time-independent parameters (e.g., standard SIR/SEIRM),
         # `params` is a 1D tensor [d_p]. It cannot and should not be sliced along the time axis.
@@ -113,16 +113,15 @@ class EINNForwardEngine:
         # Phases 2-4: future Time Module derivatives
         if context.phase_num >= 2:
             # Slicing the future steps into NetworkOutputs
-            out.ds_dt_future_T_nn = ds_dt_t_nn_full[:, past_steps:, :]
-            out.ds_dt_future_T_ode = ds_dt_t_ode_full[:, past_steps:, :]
+            out.ds_dt_future_T_nn = ds_t_dt_nn_full[:, past_steps:, :]
+            out.ds_dt_future_T_ode = ds_t_dt_ode_full[:, past_steps:, :]
 
         # Phases 3-4: Feature Module forward
         if context.phase_num >= 3:
             # Feature module requires x, t, and mask
             # It inherently decodes the entire sequence (past + future) provided in t_grad
             e_t_f_full = models.feature_module(x=x_input, t=t_grad, mask=None)
-            raw_s_t_f_full = models.output_module(e=e_t_f_full)
-            s_t_f_full = torch.sigmoid(input=raw_s_t_f_full)
+            s_t_f_full = models.output_module(e=e_t_f_full)
 
             # Slicing the past steps for the feature module targets
             out.e_t_F = e_t_f_full[:, :past_steps, :]
@@ -133,7 +132,7 @@ class EINNForwardEngine:
             de_dt_full = self._compute_empirical_derivatives(outputs=e_t_full, time_tensor=t_grad)
 
             e_t_f_grad_full = e_t_f_full.clone().detach().requires_grad_(True)
-            s_t_f_grad_full = torch.sigmoid(input=models.output_module(e=e_t_f_grad_full))
+            s_t_f_grad_full = models.output_module(e=e_t_f_grad_full)
 
             # Apply gradient trick for the FULL sequence
             ds_dt_f_nn_full = self._compute_feature_gradient_trick(
