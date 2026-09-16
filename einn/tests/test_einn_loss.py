@@ -79,7 +79,6 @@ def test_forward_phase_routing(loss_calculator_seirm: EINNLoss) -> None:
         ds_dt_T_ode=mock_tensor,
         ds_dt_future_T_nn=mock_tensor,
         ds_dt_future_T_ode=mock_tensor,
-        dS_dt_T_ode=mock_tensor,
         ds_dt_F_nn=mock_tensor,
         ds_dt_F_ode=mock_tensor,
         ds_dt_future_F_nn=mock_tensor,
@@ -120,7 +119,7 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
     network_outputs = NetworkOutputs(
         s_t=mock_states, s_t_F=mock_states, e_t=mock_states, e_t_F=mock_states,
         ds_dt_T_nn=mock_states, ds_dt_T_ode=mock_states, ds_dt_future_T_nn=mock_states,
-        ds_dt_future_T_ode=mock_states, dS_dt_T_ode=mock_states, ds_dt_F_nn=mock_states,
+        ds_dt_future_T_ode=mock_states, ds_dt_F_nn=mock_states,
         ds_dt_F_ode=mock_states, ds_dt_future_F_nn=mock_states, ds_dt_future_F_ode=mock_states,
         params=torch.ones(size=(1, 5, 2))
     )
