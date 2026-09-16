@@ -101,7 +101,15 @@ class EINNForwardEngine:
         out.s_t = s_t_full[:, :past_steps, :]
         out.ds_dt_T_nn = ds_dt_t_nn_full[:, :past_steps, :]
         out.ds_dt_T_ode = ds_dt_t_ode_full[:, :past_steps, :]
-        out.params = ode_solution_full.params[:, :past_steps, :]
+
+        # If the ODE model uses global, time-independent parameters (e.g., standard SIR/SEIRM),
+        # `params` is a 1D tensor [d_p]. It cannot and should not be sliced along the time axis.
+        # If the model dynamically predicts time-varying parameters (e.g., beta(t) via a neural net),
+        # `params` becomes a 3D tensor [Batch, Seq_len, d_p], which MUST be sliced.
+        if ode_solution_full.params.dim() == 3:
+            out.params = ode_solution_full.params[:, :past_steps, :]
+        else:
+            out.params = ode_solution_full.params
 
         # Phases 2-4: Future Time Module Derivatives
         if context.phase_num >= 2:
