@@ -1,7 +1,26 @@
+import itertools
+
+import torch
+
 from einn.training.base_phase_optimizer import BasePhaseOptimizer
 
 
 class Phase1Optimizer(BasePhaseOptimizer):
-    def __init__(self):
-        super().__init__()
-        pass
+    """
+    Optimizer for Phase 1: 'time solo'.
+    Updates: Time Module + Output Layer.
+    """
+
+    def _init_optimizer(self):
+        params = itertools.chain(
+            self.models.time_module.parameters(),
+            self.models.output_module.parameters()
+        )
+        self.optimizer = torch.optim.Adam(params, lr=self.config.learning_rate, amsgrad=True)
+
+    def prepare_network_states(self):
+        self._set_trainable(self.models.time_module, True)
+        self._set_trainable(self.models.output_module, True)
+
+        self._set_trainable(self.models.ode_model, False)
+        self._set_trainable(self.models.feature_module, False)
