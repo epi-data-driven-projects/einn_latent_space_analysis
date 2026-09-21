@@ -15,6 +15,26 @@ class SIRModel(BaseODEModel):
         """
         super().__init__()
 
+    @property
+    def mono_dec_indices(self) -> list[int]:
+        """
+        Returns the index for the strictly decreasing compartment.
+        Index 0 corresponds to 'Susceptible'.
+
+        :return list[int]: A list containing the index 0.
+        """
+        return [0]
+
+    @property
+    def mono_inc_indices(self) -> list[int]:
+        """
+        Returns the index for the strictly increasing compartment.
+        Index 2 corresponds to 'Recovered'.
+
+        :return list[int]: A list containing the index 2.
+        """
+        return [2]
+
     def init_params(self, param_dict: dict):
         """
         Initializes the raw parameters for beta and gamma using inverse tanh scaling.
