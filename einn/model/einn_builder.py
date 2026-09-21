@@ -2,8 +2,8 @@ from typing import Optional
 
 from einn.config.einn_model_config import EINNModelConfig
 from einn.config.einn_train_config import EINNTrainConfig
-from einn.model.interface.einn_models import EINNModels
 from einn.model.feature_module import FeatureModule
+from einn.model.interface.einn_models import EINNModels
 from einn.model.output_module import OutputModule
 from einn.model.time_module import TimeModule
 from einn.ode.seirm_model import SEIRMModel

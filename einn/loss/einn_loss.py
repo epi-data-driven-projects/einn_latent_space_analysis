@@ -13,30 +13,20 @@ class EINNLoss(nn.Module):
     Computes the composite loss for the EINN architecture.
     """
 
-    def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel, model_type: str):
+    def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel):
         """
         Initializes the EINNLoss module.
 
         :param EINNTrainConfig config: The configuration object containing loss weights.
-        :param BaseODEModel ode_model: The epidemiological ODE model.
-        :param str model_type: Type of ODE model ('SIR' or 'SEIRM') to determine monotonicity rules.
+        :param BaseODEModel ode_model: The epidemiological ODE model providing monotonicity rules.
         """
         super().__init__()
         self.config = config
         self.ode_model = ode_model
         self.weights = config.loss_weights
 
-        # Determine strict monotonicity indices based on the original model logic.
-        # Susceptible (S) is always index 0 and must monotonically decrease.
-        self.mono_dec_indices = [0]
-
-        # Recovered (R) and Mortality (M) must monotonically increase.
-        if model_type == "SIR":
-            self.mono_inc_indices = [2]
-        elif model_type == "SEIRM":
-            self.mono_inc_indices = [3, 4]
-        else:
-            raise ValueError(f"Unsupported model_type for monotonicity: {model_type}")
+        self.mono_dec_indices = self.ode_model.mono_dec_indices
+        self.mono_inc_indices = self.ode_model.mono_inc_indices
 
     @staticmethod
     def calc_data_loss(states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -76,26 +66,26 @@ class EINNLoss(nn.Module):
 
     @staticmethod
     def calc_monotonicity_loss(
-            ds_dt: torch.Tensor, inc_indices: list, dec_indices: list
+            ds_dt: torch.Tensor, inc_indices: list[int], dec_indices: list[int]
     ) -> torch.Tensor:
         """
         Applies a squared asymmetric ReLU penalty to enforce monotonic compartments.
-        Penalizes when decreasing states (S) have positive derivatives, and when
-        increasing states (R, M) have negative derivatives.
+        Penalizes when decreasing states (e.g., S) have positive derivatives, and when
+        increasing states (e.g., R, M) have negative derivatives.
 
-        :param torch.Tensor ds_dt: Time derivative of all the states Shape: [Batch, Seq_len, d_s].
-        :param list inc_indices: List of indices that must increase.
-        :param list dec_indices: List of indices that must decrease.
-        :return torch.Tensor: Monotonicity penalty scalar.
+        :param torch.Tensor ds_dt: Time derivative of all the states. Shape: [Batch, Seq_len, d_s].
+        :param list[int] inc_indices: List of indices that must increase.
+        :param list[int] dec_indices: List of indices that must decrease.
+        :return torch.Tensor: A scalar tensor representing the monotonicity penalty.
         """
         penalty = torch.tensor(data=0.0, dtype=torch.float32, device=ds_dt.device)
 
-        # Increasing compartments (e.g., R, M): penalty if derivative is negative
+        # Increasing compartments: apply penalty if derivative is negative
         for idx in inc_indices:
             val = -ds_dt[:, :, idx]
             penalty += torch.mean(input=(val * torch.relu(input=val)) ** 2)
 
-        # Decreasing compartments (e.g., S): penalty if derivative is positive
+        # Decreasing compartments: apply penalty if derivative is positive
         for idx in dec_indices:
             val = ds_dt[:, :, idx]
             penalty += torch.mean(input=(val * torch.relu(input=val)) ** 2)
@@ -170,6 +160,7 @@ class EINNLoss(nn.Module):
             total_loss += self.weights['data_F'] * self.calc_data_loss(
                 states=network_outputs.s_t_F, targets=phase_context.y
             )
+            # The .detach() ensures gradients do not flow back into the Time module
             total_loss += self.weights['kd_target'] * self.calc_knowledge_distillation_loss(
                 target=network_outputs.s_t.detach(), prediction=network_outputs.s_t_F
             )

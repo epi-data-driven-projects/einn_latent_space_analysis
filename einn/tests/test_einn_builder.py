@@ -11,6 +11,8 @@ from einn.ode.sir_model import SIRModel
 def base_model_config() -> EINNModelConfig:
     """
     Fixture providing a base EINNModelConfig for testing architecture dimensions.
+
+    :return EINNModelConfig: A configuration object containing model dimension settings.
     """
     config = EINNModelConfig(
         d_x=12,
@@ -28,6 +30,8 @@ def base_model_config() -> EINNModelConfig:
 def base_train_config() -> EINNTrainConfig:
     """
     Fixture providing a base EINNTrainConfig mapped to CPU for testing.
+
+    :return EINNTrainConfig: A configuration object containing training settings (e.g., device).
     """
     config = EINNTrainConfig(
         device='cpu'
@@ -39,6 +43,8 @@ def base_train_config() -> EINNTrainConfig:
 def base_calibration() -> dict:
     """
     Fixture providing dummy calibration parameters.
+
+    :return dict: A dictionary containing dummy epidemiological parameters.
     """
     return {"beta": 0.4, "gamma": 0.2, "alpha": 0.1, "mu": 0.05}
 
