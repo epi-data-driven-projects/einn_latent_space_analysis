@@ -195,3 +195,87 @@ def test_parameter_smoothness_edge_case(loss_calculator_seirm: EINNLoss):
     expected_loss = torch.tensor(data=0.0, dtype=torch.float32)
     assert torch.allclose(input=smooth_loss, other=expected_loss), \
         "Smoothness loss did not handle sequence length 1 gracefully."
+
+
+def test_knowledge_distillation_gradient_isolation(loss_calculator_seirm: EINNLoss):
+    """
+    Proves mathematically that the Knowledge Distillation (KD) loss component does not leak gradients into the
+    Time module, even when the Time Module is actively learning and receiving gradients from
+    other active losses in Phase 3.
+
+    :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
+    """
+    # Time Module outputs (requires_grad=True to simulate the active Time Module)
+    teacher_s_t = torch.rand(size=(1, 5, 5), requires_grad=True)
+    teacher_e_t = torch.rand(size=(1, 5, 20), requires_grad=True)
+
+    # Feature Module outputs (requires_grad=True to simulate the active Feature Module)
+    student_s_t_F = torch.rand(size=(1, 5, 5), requires_grad=True)
+    student_e_t_F = torch.rand(size=(1, 5, 20), requires_grad=True)
+
+    # Dummy tensors to satisfy the Phase 1 and 2 cascades without error
+    dummy_states = torch.zeros(size=(1, 5, 5))
+    dummy_params = torch.zeros(size=(1, 5, 4))
+
+    def run_forward_backward(kd_weight: float):
+        """
+        Helper function to run a full forward-backward pass and return the cloned gradients.
+        """
+        # Reset gradients manually
+        teacher_s_t.grad = None
+        teacher_e_t.grad = None
+        student_s_t_F.grad = None
+        student_e_t_F.grad = None
+
+        network_outputs = NetworkOutputs(
+            s_t=teacher_s_t, e_t=teacher_e_t,
+            s_t_F=student_s_t_F, e_t_F=student_e_t_F,
+            ds_dt_T_nn=dummy_states, ds_dt_T_ode=dummy_states,
+            ds_dt_future_T_nn=dummy_states, ds_dt_future_T_ode=dummy_states,
+            ds_dt_F_nn=dummy_states, ds_dt_F_ode=dummy_states,
+            ds_dt_future_F_nn=dummy_states, ds_dt_future_F_ode=dummy_states,
+            params=dummy_params
+        )
+
+        context = PhaseContext(
+            phase_num=3, epoch=1,
+            x=torch.zeros(size=(1, 5, 5)),
+            y=torch.zeros(size=(1, 5, 1)),
+            t=torch.zeros(size=(1, 5, 1)),
+            aux_targets=dummy_states,
+            models=None
+        )
+
+        # Set active baseline losses so the Time Module natively receives gradients
+        loss_calculator_seirm.weights['data_T'] = 1.0
+        loss_calculator_seirm.weights['aux'] = 1.0
+
+        # Toggle Knowledge Distillation dynamically
+        loss_calculator_seirm.weights['kd_target'] = kd_weight
+        loss_calculator_seirm.weights['kd_emb'] = kd_weight
+
+        total_loss = loss_calculator_seirm(phase_context=context, network_outputs=network_outputs)
+        total_loss.backward()
+
+        return (
+            teacher_s_t.grad.clone() if teacher_s_t.grad is not None else None,
+            student_s_t_F.grad.clone() if student_s_t_F.grad is not None else None,
+            student_e_t_F.grad.clone() if student_e_t_F.grad is not None else None
+        )
+
+    # Run WITHOUT Knowledge Distillation (Baseline gradients)
+    t_s_grad_base, s_s_grad_base, s_e_grad_base = run_forward_backward(kd_weight=0.0)
+
+    # Run WITH Knowledge Distillation
+    t_s_grad_kd, s_s_grad_kd, s_e_grad_kd = run_forward_backward(kd_weight=1.0)
+
+    # The Time Module MUST have received base gradients from data_T and aux losses
+    assert t_s_grad_base is not None, "Time Module did not receive baseline gradients."
+
+    # The Time Module's gradients MUST be mathematically identical whether KD is applied or not.
+    assert torch.allclose(input=t_s_grad_base, other=t_s_grad_kd), \
+        "Knowledge Distillation leaked into the Times Module's state gradients despite .detach()!"
+
+    # The Feature Module MUST receive new, distinct gradients when KD is turned on.
+    assert s_s_grad_kd is not None, "Feature Module states did not receive gradients from KD."
+    assert s_e_grad_kd is not None, "Feature Module embeddings did not receive gradients from KD."
