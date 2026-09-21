@@ -73,6 +73,5 @@ class SIRModel(BaseODEModel):
 
         return ODESolution(
             ds_dt=ds_dt_tensor,
-            params=params,
-            t=torch.empty(size=(0,))  # Placeholder for interface compatibility since parameters are not time-dependent
+            params=params
         )
