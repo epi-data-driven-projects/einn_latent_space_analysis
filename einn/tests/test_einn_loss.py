@@ -100,7 +100,7 @@ def test_forward_phase_routing(loss_calculator_seirm: EINNLoss):
     context = PhaseContext(
         phase_num=4,
         epoch=1,
-        X=mock_tensor,
+        x=mock_tensor,
         y=mock_tensor,
         t=torch.zeros(size=(1, 5, 1)),
         aux_targets=mock_tensor,
@@ -138,7 +138,7 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
     )
 
     context_phase1 = PhaseContext(
-        phase_num=1, epoch=1, X=mock_targets, y=mock_targets,
+        phase_num=1, epoch=1, x=mock_targets, y=mock_targets,
         t=torch.zeros(size=(1, 5, 1)), aux_targets=mock_targets, models=None
     )
 
