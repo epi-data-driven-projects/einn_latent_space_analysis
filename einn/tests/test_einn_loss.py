@@ -5,6 +5,8 @@ from einn.config.einn_train_config import EINNTrainConfig
 from einn.loss.einn_loss import EINNLoss
 from einn.model.interface.network_outputs import NetworkOutputs
 from einn.model.interface.phase_context import PhaseContext
+from einn.ode.seirm_model import SEIRMModel
+from einn.ode.sir_model import SIRModel
 
 
 @pytest.fixture
@@ -20,12 +22,13 @@ def base_train_config() -> EINNTrainConfig:
 @pytest.fixture
 def loss_calculator_seirm(base_train_config: EINNTrainConfig) -> EINNLoss:
     """
-    Fixture providing an initialized EINNLoss for the SEIRM model.
+    Fixture providing an initialized EINNLoss configured for the SEIRM model.
 
     :param EINNTrainConfig base_train_config: The base training configuration fixture.
-    :return EINNLoss: Initialized loss calculator for SEIRM.
+    :return EINNLoss: Initialized loss calculator using SEIRM monotonicity rules.
     """
-    return EINNLoss(config=base_train_config, ode_model=None, model_type="SEIRM")
+    ode_model = SEIRMModel(population_n=1.0)
+    return EINNLoss(config=base_train_config, ode_model=ode_model)
 
 
 def test_monotonicity_loss_penalties(loss_calculator_seirm: EINNLoss):
@@ -123,7 +126,9 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
         'data_T': 2.0, 'aux': 3.0, 'mono': 0.0, 'ode_T': 0.0, 'ode_future_T': 0.0,
         'param': 0.0, 'data_F': 0.0, 'kd_target': 0.0, 'kd_emb': 0.0, 'ode_F': 0.0, 'ode_future_F': 0.0
     }
-    loss_calculator = EINNLoss(config=base_train_config, ode_model=None, model_type="SIR")
+
+    ode_model = SIRModel()
+    loss_calculator = EINNLoss(config=base_train_config, ode_model=ode_model)
 
     # MSE should be 1.0
     mock_targets = torch.zeros(size=(1, 5, 1))
@@ -151,16 +156,16 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
 def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig):
     """
     Advanced architectural test: Ensures that SIR and SEIRM models apply
-    monotonicity penalties to entirely different compartments based on their physics.
+    monotonicity penalties to entirely different compartments based on their internal physics.
 
     :param EINNTrainConfig base_train_config: The training configuration fixture.
     """
-    loss_sir = EINNLoss(config=base_train_config, ode_model=None, model_type="SIR")
-    loss_seirm = EINNLoss(config=base_train_config, ode_model=None, model_type="SEIRM")
+    loss_sir = EINNLoss(config=base_train_config, ode_model=SIRModel())
+    loss_seirm = EINNLoss(config=base_train_config, ode_model=SEIRMModel(population_n=1.0))
 
     # A derivative tensor where the value at index 2 is strongly negative (-5.0).
     # In the SIR model, this is R (Recovered), so it must be penalized.
-    # In the SEIRM model, this is I (Infected), which can fluctuate, so it is NOT penalized (only indices 3 and 4 are).
+    # In the SEIRM model, this is I (Infected), which can fluctuate, so it is NOT penalized.
     mock_ds_dt = torch.tensor(data=[[[0.0, 0.0, -5.0, 0.0, 0.0]]], dtype=torch.float32)
 
     sir_penalty = loss_sir.calc_monotonicity_loss(
@@ -177,15 +182,14 @@ def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig):
 
 def test_parameter_smoothness_edge_case(loss_calculator_seirm: EINNLoss):
     """
-    Edge case test: Ensures that parameter smoothness loss safely returns 0.0
-    without crashing when the sequence length is 1.
+    Ensures that parameter smoothness loss safely returns 0.0
+    without crashing when the sequence length is exactly 1.
 
     :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
     """
     # [Batch=1, Seq_len=1, d_p=4]
     params_seq_1 = torch.tensor(data=[[[0.5, 0.2, 0.1, 0.05]]], dtype=torch.float32)
 
-    # It shouldn't give IndexError
     smooth_loss = loss_calculator_seirm.calc_parameter_smoothness_loss(params=params_seq_1)
 
     expected_loss = torch.tensor(data=0.0, dtype=torch.float32)
