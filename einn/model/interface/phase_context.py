@@ -11,7 +11,7 @@ class PhaseContext:
 
     :param int phase_num: current optimization phase identifier (1, 2, 3, or 4)
     :param int epoch: current training epoch number
-    :param torch.Tensor X: tensor of noisy input observations for the current batch
+    :param torch.Tensor x: tensor of noisy input observations for the current batch
     :param torch.Tensor y: tensor of target variables
     :param torch.Tensor t: tensor of time steps to evaluate
     :param torch.Tensor aux_targets: tensor of ideal trajectories for the initial auxiliary loss
@@ -19,7 +19,7 @@ class PhaseContext:
     """
     phase_num: int
     epoch: int
-    X: torch.Tensor
+    x: torch.Tensor
     y: torch.Tensor
     t: torch.Tensor
     aux_targets: torch.Tensor
