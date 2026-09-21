@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from einn.config.einn_train_config import EINNTrainConfig
-from einn.ode.base_ode_model import BaseODEModel
 from einn.model.interface.network_outputs import NetworkOutputs
 from einn.model.interface.phase_context import PhaseContext
+from einn.ode.base_ode_model import BaseODEModel
 
 
 class EINNLoss(nn.Module):

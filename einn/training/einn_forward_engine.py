@@ -81,7 +81,7 @@ class EINNForwardEngine:
         out = NetworkOutputs()
         models = context.models
 
-        x_input = context.X
+        x_input = context.x
         past_steps = x_input.shape[1]
 
         # t_grad covers the ENTIRE sequence (past + future steps)
