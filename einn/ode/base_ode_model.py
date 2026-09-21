@@ -18,6 +18,28 @@ class BaseODEModel(nn.Module, ABC):
 
         self.raw_params = None
 
+    @property
+    @abstractmethod
+    def mono_dec_indices(self) -> list[int]:
+        """
+        Defines the indices of the compartments that must strictly decrease over time
+        in a closed population (e.g., Susceptible).
+
+        :return list[int]: A list of integers representing the decreasing compartment indices.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def mono_inc_indices(self) -> list[int]:
+        """
+        Defines the indices of the compartments that must strictly increase over time
+        in a closed population (e.g., Recovered, Mortality).
+
+        :return list[int]: A list of integers representing the increasing compartment indices.
+        """
+        pass
+
     @abstractmethod
     def init_params(self, param_dict: dict):
         """
@@ -32,7 +54,7 @@ class BaseODEModel(nn.Module, ABC):
         """
         Calculates the analytic derivatives of the ODE compartment states over time.
 
-        :param torch.Tensor states: The current compartment states.
+        :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, d_s].
         :param bool detach_params: Whether to detach parameters from the computation graph.
         :return ODESolution: An object containing derivatives, scaled parameters, and time.
         """
@@ -42,8 +64,8 @@ class BaseODEModel(nn.Module, ABC):
         """
         Scales the raw parameters into physically meaningful bounds (0 to 1) using the tanh trick.
 
-        :param bool detach: If True, detaches the tensor from the autograd graph.
-        :return torch.Tensor: Scaled parameter tensor.
+        :param bool detach: If True, detaches the returned tensor from the autograd graph.
+        :return torch.Tensor: Scaled parameter tensor bound between 0 and 1.
         """
         if self.raw_params is None:
             raise ValueError("raw_params must be initialized via init_params() first.")
