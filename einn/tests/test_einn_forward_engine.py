@@ -113,7 +113,7 @@ def test_forward_slicing_phase_2(engine: EINNForwardEngine, initialized_models):
     context = PhaseContext(
         phase_num=2,
         epoch=1,
-        X=x_past,
+        x=x_past,
         y=torch.rand(size=(2, past_steps, 1)),
         t=t_full,
         aux_targets=torch.rand(size=(2, past_steps, 5)),
@@ -150,7 +150,7 @@ def test_forward_full_pipeline_phase_4(engine: EINNForwardEngine, initialized_mo
     context = PhaseContext(
         phase_num=4,
         epoch=10,
-        X=x_past,
+        x=x_past,
         y=torch.rand(size=(2, past_steps, 1)),
         t=t_full,
         aux_targets=torch.rand(size=(2, past_steps, 5)),
