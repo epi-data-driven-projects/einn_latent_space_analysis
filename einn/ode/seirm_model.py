@@ -18,6 +18,26 @@ class SEIRMModel(BaseODEModel):
         super().__init__()
         self.population_n = population_n
 
+    @property
+    def mono_dec_indices(self) -> list[int]:
+        """
+        Returns the index for the strictly decreasing compartment.
+        Index 0 corresponds to 'Susceptible'.
+
+        :return list[int]: A list containing the index 0.
+        """
+        return [0]
+
+    @property
+    def mono_inc_indices(self) -> list[int]:
+        """
+        Returns the indices for the strictly increasing compartments.
+        Index 3 corresponds to 'Recovered', Index 4 corresponds to 'Mortality'.
+
+        :return list[int]: A list containing the indices 3 and 4.
+        """
+        return [3, 4]
+
     def init_params(self, param_dict: dict):
         """
         Initializes the raw parameters for alpha, beta, gamma, and mu using inverse tanh scaling.
