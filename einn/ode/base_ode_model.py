@@ -64,7 +64,7 @@ class BaseODEModel(nn.Module, ABC):
         """
         Scales the raw parameters into physically meaningful bounds (0 to 1) using the tanh trick.
 
-        :param bool detach: If True, detaches the returned tensor from the autograd graph.
+        :param bool detach: If True, detaches the tensor from the autograd graph.
         :return torch.Tensor: Scaled parameter tensor bound between 0 and 1.
         """
         if self.raw_params is None:
