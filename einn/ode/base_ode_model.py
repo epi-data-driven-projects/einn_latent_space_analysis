@@ -18,27 +18,12 @@ class BaseODEModel(nn.Module, ABC):
 
         self.raw_params = None
 
-    @property
-    @abstractmethod
-    def mono_dec_indices(self) -> list[int]:
-        """
-        Defines the indices of the compartments that must strictly decrease over time
-        in a closed population (e.g., Susceptible).
-
-        :return list[int]: A list of integers representing the decreasing compartment indices.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def mono_inc_indices(self) -> list[int]:
-        """
-        Defines the indices of the compartments that must strictly increase over time
-        in a closed population (e.g., Recovered, Mortality).
-
-        :return list[int]: A list of integers representing the increasing compartment indices.
-        """
-        pass
+        # Dictionary storing compartment indices for monotonicity constraints. Keys represent the required
+        # behavior ('decreasing', 'increasing'), and values are lists of compartment indices.
+        self.monotonicity_indices: dict[str, list[int]] = {
+            "decreasing": [],
+            "increasing": []
+        }
 
     @abstractmethod
     def init_params(self, param_dict: dict):
