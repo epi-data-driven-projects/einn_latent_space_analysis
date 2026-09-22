@@ -28,7 +28,6 @@ class Phase3Optimizer(BasePhaseOptimizer):
         """
         Configures the gradient tracking and execution modes (train/eval) for all networks.
         Sets Time, Feature, and Output modules to trainable.
-        Freezes the ODE model to save memory and computation, as its parameters are not updated.
         """
         self._set_trainable(self.models.time_module, trainable=True)
         self._set_trainable(self.models.output_module, trainable=True)
