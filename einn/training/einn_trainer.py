@@ -24,8 +24,8 @@ class EINNTrainer:
     def __init__(self, models: EINNModels, config: EINNTrainConfig):
         """
         Asd
-        :param models:
-        :param config:
+        :param EINNModels models:
+        :param EINNTrainConfig config:
         """
         self.models = models
         self.config = config
@@ -44,7 +44,7 @@ class EINNTrainer:
                                           loss_calculator=self.loss_calculator)
 
     def train(self, dataset: EINNDataset,
-              epochs: int, reps: dict[str, int], batch_size: int = 1) -> List[TrainingMetrics]:
+               epochs: int, reps: dict[str, int], batch_size: int = 1) -> List[TrainingMetrics]:
         """
         Executes the main training loop across all epochs and phases.
 
@@ -62,26 +62,31 @@ class EINNTrainer:
         for epoch in range(1, epochs + 1):
             self.logger.info(f"--- EPOCH {epoch}/{epochs} ---")
 
-            if reps.get('time', 0) > 0:
-                all_metrics.extend(self._run_phase(
-                    optimizer=self.opt_phase1, phase_num=1, reps=reps['time'], epoch=epoch, dataloader=dataloader))
+            all_metrics.extend(self._run_phase(
+                optimizer=self.opt_phase1, phase_num=1, reps=reps['phase_1'], epoch=epoch, dataloader=dataloader))
 
-            if reps.get('time_ode', 0) > 0:
-                all_metrics.extend(self._run_phase(
-                    optimizer=self.opt_phase2, phase_num=2, reps=reps['time_ode'], epoch=epoch, dataloader=dataloader))
+            all_metrics.extend(self._run_phase(
+                optimizer=self.opt_phase2, phase_num=2, reps=reps['phase_2'], epoch=epoch, dataloader=dataloader))
 
-            if reps.get('feat_time', 0) > 0:
-                all_metrics.extend(self._run_phase(
-                    optimizer=self.opt_phase3, phase_num=3, reps=reps['feat_time'], epoch=epoch, dataloader=dataloader))
+            all_metrics.extend(self._run_phase(
+                optimizer=self.opt_phase3, phase_num=3, reps=reps['phase_3'], epoch=epoch, dataloader=dataloader))
 
-            if reps.get('out', 0) > 0:
-                all_metrics.extend(self._run_phase(
-                    optimizer=self.opt_phase4, phase_num=4, reps=reps['out'], epoch=epoch, dataloader=dataloader))
+            all_metrics.extend(self._run_phase(
+                optimizer=self.opt_phase4, phase_num=4, reps=reps['phase_4'], epoch=epoch, dataloader=dataloader))
 
         return all_metrics
 
     def _run_phase(self, optimizer,
                    phase_num: int, reps: int, epoch: int, dataloader: DataLoader) -> List[TrainingMetrics]:
+        """
+
+        :param optimizer:
+        :param phase_num:
+        :param reps:
+        :param epoch:
+        :param dataloader:
+        :return:
+        """
         metrics_list = []
 
         for rep in range(1, reps + 1):
