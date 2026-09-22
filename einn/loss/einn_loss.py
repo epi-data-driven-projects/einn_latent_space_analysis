@@ -25,8 +25,8 @@ class EINNLoss(nn.Module):
         self.ode_model = ode_model
         self.weights = config.loss_weights
 
-        self.mono_dec_indices = self.ode_model.mono_dec_indices
-        self.mono_inc_indices = self.ode_model.mono_inc_indices
+        self.mono_dec_indices = self.ode_model.monotonicity_indices["decreasing"]
+        self.mono_inc_indices = self.ode_model.monotonicity_indices["increasing"]
 
     @staticmethod
     def calc_data_loss(states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
