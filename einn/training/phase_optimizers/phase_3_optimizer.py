@@ -31,9 +31,6 @@ class Phase3Optimizer(BasePhaseOptimizer):
         Freezes the ODE model to save memory and computation, as its parameters are not updated.
         """
         self._set_trainable(self.models.time_module, trainable=True)
-        self._set_trainable(self.models.feature_module, trainable=True)
         self._set_trainable(self.models.output_module, trainable=True)
-
-        # Although ODE loss is calculated, ODE params are not updated by this Adam optimizer.
-        # Setting requires_grad=False saves memory and computation.
         self._set_trainable(self.models.ode_model, trainable=False)
+        self._set_trainable(self.models.feature_module, trainable=True)

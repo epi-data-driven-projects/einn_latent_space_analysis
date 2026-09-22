@@ -31,6 +31,7 @@ class Phase4Optimizer(BasePhaseOptimizer):
         Strictly freezes the Time and Feature modules so latent embeddings act as constants.
         """
         self._set_trainable(self.models.time_module, trainable=False)
-        self._set_trainable(self.models.feature_module, trainable=False)
         self._set_trainable(self.models.output_module, trainable=True)
         self._set_trainable(self.models.ode_model, trainable=True)
+        self._set_trainable(self.models.feature_module, trainable=False)
+
