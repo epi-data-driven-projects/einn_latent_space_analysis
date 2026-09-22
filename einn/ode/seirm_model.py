@@ -18,6 +18,11 @@ class SEIRMModel(BaseODEModel):
         super().__init__()
         self.population_n = population_n
 
+        self.monotonicity_indices = {
+            "decreasing": [0],  # Susceptible
+            "increasing": [3, 4]  # Recovered, Mortality
+        }
+
     def init_params(self, param_dict: dict):
         """
         Initializes the raw parameters for alpha, beta, gamma, and mu using inverse tanh scaling.

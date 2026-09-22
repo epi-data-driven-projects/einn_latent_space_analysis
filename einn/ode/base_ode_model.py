@@ -18,6 +18,13 @@ class BaseODEModel(nn.Module, ABC):
 
         self.raw_params = None
 
+        # Dictionary storing compartment indices for monotonicity constraints. Keys represent the required
+        # behavior ('decreasing', 'increasing'), and values are lists of compartment indices.
+        self.monotonicity_indices: dict[str, list[int]] = {
+            "decreasing": [],
+            "increasing": []
+        }
+
     @abstractmethod
     def init_params(self, param_dict: dict):
         """
@@ -32,7 +39,7 @@ class BaseODEModel(nn.Module, ABC):
         """
         Calculates the analytic derivatives of the ODE compartment states over time.
 
-        :param torch.Tensor states: The current compartment states.
+        :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, d_s].
         :param bool detach_params: Whether to detach parameters from the computation graph.
         :return ODESolution: An object containing derivatives, scaled parameters, and time.
         """
@@ -43,7 +50,7 @@ class BaseODEModel(nn.Module, ABC):
         Scales the raw parameters into physically meaningful bounds (0 to 1) using the tanh trick.
 
         :param bool detach: If True, detaches the tensor from the autograd graph.
-        :return torch.Tensor: Scaled parameter tensor.
+        :return torch.Tensor: Scaled parameter tensor bound between 0 and 1.
         """
         if self.raw_params is None:
             raise ValueError("raw_params must be initialized via init_params() first.")
