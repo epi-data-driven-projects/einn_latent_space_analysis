@@ -27,8 +27,7 @@ class Phase4Optimizer(BasePhaseOptimizer):
     def prepare_network_states(self):
         """
         Configures the gradient tracking and execution modes (train/eval) for all networks.
-        Sets the Output module and ODE model to trainable.
-        Strictly freezes the Time and Feature modules so latent embeddings act as constants.
+        Sets the Output module and ODE model to trainable, freezes the Time and Feature modules.
         """
         self._set_trainable(self.models.time_module, trainable=False)
         self._set_trainable(self.models.output_module, trainable=True)
