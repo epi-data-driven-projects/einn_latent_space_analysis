@@ -9,7 +9,7 @@ class Phase2Optimizer(BasePhaseOptimizer):
     """
     Optimizer for Phase 2: 'time + ode'.
     Responsible for incorporating physical ODE parameters into the Time Module's training.
-    The Feature Module remains completely frozen.
+    The Feature Module remains frozen.
     """
 
     def _init_optimizer(self):

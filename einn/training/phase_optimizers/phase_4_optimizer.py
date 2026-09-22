@@ -9,7 +9,7 @@ class Phase4Optimizer(BasePhaseOptimizer):
     """
     Optimizer for Phase 4: 'only out layer + ode params' (Gradient Trick).
     Responsible for the final fine-tuning step using the analytical ODE derivatives.
-    Only the Output Layer and ODE Params are updated.
+    Only the Output Layer and ODE params are updated.
     """
 
     def _init_optimizer(self):
