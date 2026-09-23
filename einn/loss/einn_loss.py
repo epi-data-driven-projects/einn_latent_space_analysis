@@ -100,7 +100,7 @@ class EINNLoss(nn.Module):
         :param torch.Tensor params: Time-dependent parameter tensor. Shape: [Batch, Seq_len, d_p].
         :return torch.Tensor: Parameter smoothness loss.
         """
-        if params.shape[1] <= 1:
+        if params.dim() < 2 or params.shape[1] <= 1:
             return torch.tensor(data=0.0, dtype=torch.float32, device=params.device)
 
         diff = params[:, 1:, :] - params[:, :-1, :]
