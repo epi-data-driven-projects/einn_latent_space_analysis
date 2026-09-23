@@ -12,8 +12,7 @@ from einn.training.einn_trainer import EINNTrainer
 @pytest.fixture
 def integrated_trainer_setup() -> dict:
     """
-    Fixture providing all initialized components needed to test the EINNTrainer,
-    including a mock dataset.
+    Fixture providing all initialized components needed to test the EINNTrainer, including a mock dataset.
 
     :return dict: Dictionary containing the trainer and the dataset.
     """
@@ -48,8 +47,8 @@ def integrated_trainer_setup() -> dict:
 
 def test_trainer_initialization(integrated_trainer_setup: dict):
     """
-    Tests if the EINNTrainer correctly initializes all independent phase optimizers
-    and preserves their unique Adam optimizer states.
+    Tests if the EINNTrainer correctly initializes all independent phase optimizers and preserves their
+    unique Adam optimizer states.
 
     :param dict integrated_trainer_setup: The fixture providing the trainer.
     """
@@ -95,7 +94,7 @@ def test_trainer_phase_routing_and_reps(integrated_trainer_setup: dict):
 
 def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
     """
-    ADVANCED TEST: Ensures that calling a phase across multiple epochs does NOT
+    Ensures that calling a phase across multiple epochs does NOT
     recreate the PyTorch optimizer, thereby securely preserving the Adam momentum states.
 
     :param dict integrated_trainer_setup: The fixture providing the trainer and dataset.
@@ -115,7 +114,7 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
 
 def test_trainer_integration_overfitting(integrated_trainer_setup: dict):
     """
-    ADVANCED INTEGRATION TEST: Executes the full trainer pipeline across multiple epochs
+    Executes the full trainer pipeline across multiple epochs
     to prove that the gradients actively flow, weights update, and the total composite loss decreases.
     This validates the entire end-to-end forward/backward process.
 
@@ -145,7 +144,7 @@ def test_trainer_integration_overfitting(integrated_trainer_setup: dict):
 
 def test_dataloader_context_mapping_integrity(integrated_trainer_setup: dict):
     """
-    CRITICAL EDGE-CASE TEST: Asserts that the keys extracted from the EINNDataset yield
+    Asserts that the keys extracted from the EINNDataset yield
     by the DataLoader strictly match the kwargs required to instantiate the PhaseContext,
     preventing runtime KeyErrors during batch processing.
 
