@@ -156,7 +156,7 @@ def test_dataloader_context_mapping_integrity(integrated_trainer_setup: dict):
     # Simulate the DataLoader's output from the custom Dataset
     sample_batch = dataset[0]
 
-    expected_keys = {'x', 'y', 't', 'aux_targets'}
+    expected_keys = {'X', 'y', 't', 'aux_targets'}
     actual_keys = set(sample_batch.keys())
 
     # Lowercase 'x' is explicitly expected based on the user's latest update
