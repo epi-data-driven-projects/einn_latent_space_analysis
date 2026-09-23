@@ -102,9 +102,16 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
     trainer = integrated_trainer_setup["trainer"]
     dataset = integrated_trainer_setup["dataset"]
 
+    reps = {
+        'phase_1': 1,
+        'phase_2': 0,
+        'phase_3': 0,
+        'phase_4': 0
+    }
+
     opt_id_before = id(trainer.opt_phase1.optimizer)
 
-    trainer.train(dataset=dataset, epochs=2, reps={'phase_1': 1}, batch_size=2)
+    trainer.train(dataset=dataset, epochs=2, reps=reps, batch_size=2)
 
     opt_id_after = id(trainer.opt_phase1.optimizer)
 
@@ -114,9 +121,8 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
 
 def test_trainer_integration_overfitting(integrated_trainer_setup: dict):
     """
-    Executes the full trainer pipeline across multiple epochs
-    to prove that the gradients actively flow, weights update, and the total composite loss decreases.
-    This validates the entire end-to-end forward/backward process.
+    Executes the full trainer pipeline across multiple epochs to prove that the gradients actively flow, weights update,
+     and the total composite loss decreases. This validates the entire end-to-end forward/backward process.
 
     :param dict integrated_trainer_setup: The fixture providing the trainer and dataset.
     """
