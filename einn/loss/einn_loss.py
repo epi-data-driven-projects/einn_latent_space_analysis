@@ -38,6 +38,9 @@ class EINNLoss(nn.Module):
         :param torch.Tensor targets: Ground truth observations. Shape: [Batch, Seq_len, target_dim].
         :return torch.Tensor: Data MSE loss.
         """
+        if states.numel() == 0 or targets.numel() == 0:
+            return torch.tensor(data=0.0, dtype=torch.float32, device=states.device)
+
         target_dim = targets.shape[2]
         return F.mse_loss(input=states[:, :, :target_dim], target=targets)
 
@@ -50,6 +53,9 @@ class EINNLoss(nn.Module):
         :param torch.Tensor aux_targets: Ideal simulated compartment states.
         :return torch.Tensor: Auxiliary MSE loss.
         """
+        if states.numel() == 0:
+            return torch.tensor(data=0.0, dtype=torch.float32, device=states.device)
+
         return F.mse_loss(input=states, target=aux_targets)
 
     @staticmethod
@@ -62,6 +68,8 @@ class EINNLoss(nn.Module):
         :param torch.Tensor ds_dt_ode: Analytical derivative from the ODE model.
         :return torch.Tensor: Physics MSE loss.
         """
+        if ds_dt_nn.numel() == 0:
+            return torch.tensor(data=0.0, dtype=torch.float32, device=ds_dt_nn.device)
         return F.mse_loss(input=ds_dt_nn, target=ds_dt_ode)
 
     @staticmethod
@@ -78,6 +86,9 @@ class EINNLoss(nn.Module):
         :param list[int] dec_indices: List of indices that must decrease.
         :return torch.Tensor: A scalar tensor representing the monotonicity penalty.
         """
+        if ds_dt.numel() == 0:
+            return torch.tensor(data=0.0, dtype=torch.float32, device=ds_dt.device)
+
         penalty = torch.tensor(data=0.0, dtype=torch.float32, device=ds_dt.device)
 
         # Increasing compartments: apply penalty if derivative is negative
@@ -100,6 +111,7 @@ class EINNLoss(nn.Module):
         :param torch.Tensor params: Time-dependent parameter tensor. Shape: [Batch, Seq_len, d_p].
         :return torch.Tensor: Parameter smoothness loss.
         """
+        # For time-independent parameters
         if params.dim() < 2 or params.shape[1] <= 1:
             return torch.tensor(data=0.0, dtype=torch.float32, device=params.device)
 
@@ -116,6 +128,9 @@ class EINNLoss(nn.Module):
         :param torch.Tensor prediction: The tensor from the FeatureModule network.
         :return torch.Tensor: KD MSE loss (embedding or target loss)
         """
+        if prediction.numel() == 0:
+            return torch.tensor(data=0.0, dtype=torch.float32, device=prediction.device)
+
         return F.mse_loss(input=prediction, target=target)
 
     def forward(self, phase_context: PhaseContext, network_outputs: NetworkOutputs) -> torch.Tensor:
