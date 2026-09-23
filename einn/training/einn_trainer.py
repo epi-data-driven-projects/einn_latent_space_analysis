@@ -18,7 +18,7 @@ from einn.training.phase_optimizers.phase_4_optimizer import Phase4Optimizer
 
 class EINNTrainer:
     """
-    Orchestrates the multi-phase training process of the Epidemiologically-Informed Neural Network (EINN).
+    Orchestrates the multiphase training process of the Epidemiologically-Informed Neural Network (EINN).
     Manages the phase optimizers, dataloaders, and coordinates the sequential training epochs.
     """
     def __init__(self, models: EINNModels, config: EINNTrainConfig):
@@ -66,16 +66,16 @@ class EINNTrainer:
 
             # Execute phases sequentially based on the provided repetition dictionary
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase1, phase_num=1, reps=reps.get('phase_1', 0), epoch=epoch, dataloader=dataloader))
+                optimizer=self.opt_phase1, phase_num=1, reps=reps['phase_1'], epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase2, phase_num=2, reps=reps.get('phase_2', 0), epoch=epoch, dataloader=dataloader))
+                optimizer=self.opt_phase2, phase_num=2, reps=reps['phase_2'], epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase3, phase_num=3, reps=reps.get('phase_3', 0), epoch=epoch, dataloader=dataloader))
+                optimizer=self.opt_phase3, phase_num=3, reps=reps['phase_3'], epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase4, phase_num=4, reps=reps.get('phase_4', 0), epoch=epoch, dataloader=dataloader))
+                optimizer=self.opt_phase4, phase_num=4, reps=reps['phase_4'], epoch=epoch, dataloader=dataloader))
 
         return all_metrics
 
@@ -118,7 +118,6 @@ class EINNTrainer:
             # Average the loss across all batches processed
             avg_loss = total_epoch_loss / max(1, batches_count)
 
-            # TODO: egyelőre csak total_loss legyen
             metrics = TrainingMetrics(
                 epoch=epoch, phase=phase_num, rep=rep,
                 total_loss=avg_loss
