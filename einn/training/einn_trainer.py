@@ -21,6 +21,7 @@ class EINNTrainer:
     Orchestrates the multiphase training process of the Epidemiologically-Informed Neural Network (EINN).
     Manages the phase optimizers, dataloaders, and coordinates the sequential training epochs.
     """
+
     def __init__(self, models: EINNModels, config: EINNTrainConfig):
         """
         Initializes the trainer, the forward engine, the loss calculator, and all 4 independent phase optimizers.
@@ -46,7 +47,7 @@ class EINNTrainer:
                                           loss_calculator=self.loss_calculator)
 
     def train(self, dataset: EINNDataset,
-               epochs: int, reps: dict[str, int], batch_size: int = 1) -> List[TrainingMetrics]:
+              epochs: int, reps: dict[str, int], batch_size: int = 1) -> List[TrainingMetrics]:
         """
         Executes the main training loop across all epochs and phases.
 
