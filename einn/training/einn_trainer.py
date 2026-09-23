@@ -102,7 +102,7 @@ class EINNTrainer:
                 context = PhaseContext(
                     phase_num=phase_num,
                     epoch=epoch,
-                    x=batch_data['x'],
+                    x=batch_data['X'],
                     y=batch_data['y'],
                     t=batch_data['t'],
                     aux_targets=batch_data['aux_targets'],
@@ -121,13 +121,7 @@ class EINNTrainer:
             # TODO: egyelőre csak total_loss legyen
             metrics = TrainingMetrics(
                 epoch=epoch, phase=phase_num, rep=rep,
-                total_loss=avg_loss,
-                loss_data_T=0.0, loss_data_F=0.0,
-                loss_aux=0.0, loss_ode_T=0.0,
-                loss_ode_F=0.0, loss_ode_future_T=0.0,
-                loss_ode_future_F=0.0, loss_mono=0.0,
-                loss_param=0.0, loss_kd_target=0.0,
-                loss_kd_emb=0.0
+                total_loss=avg_loss
             )
             metrics_list.append(metrics)
 
