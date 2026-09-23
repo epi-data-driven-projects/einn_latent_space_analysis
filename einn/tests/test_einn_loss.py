@@ -279,3 +279,93 @@ def test_knowledge_distillation_gradient_isolation(loss_calculator_seirm: EINNLo
     # The Feature Module MUST receive new, distinct gradients when KD is turned on.
     assert s_s_grad_kd is not None, "Feature Module states did not receive gradients from KD."
     assert s_e_grad_kd is not None, "Feature Module embeddings did not receive gradients from KD."
+
+
+def test_all_loss_components_aggregation(loss_calculator_seirm: EINNLoss):
+    """
+    Calculates and aggregates all 11 loss components during a Phase 4 forward pass.
+    Validates the mathematical correctness of every single static loss function (Data, Aux, ODE, Monotonicity,
+    Param smoothness, KD) simultaneously.
+
+    :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
+    """
+    # 1. Minden kulcs csupa kisbetű, és bekerült mindkét (t és f) ode_future!
+    loss_calculator_seirm.weights = {
+        'data_t': 1.0, 'aux': 1.0, 'mono': 1.0,
+        'ode_t': 1.0, 'ode_future_t': 1.0, 'param': 1.0,
+        'data_f': 1.0, 'kd_target': 1.0, 'kd_emb': 1.0,
+        'ode_f': 1.0, 'ode_future_f': 1.0
+    }
+
+    # Tensors for Data, Aux and Knowledge Distillation
+    # data_t: MSE(2.0, 1.0) = 1.0
+    # aux: MSE(2.0, 1.0) = 1.0
+    # data_f: MSE(3.0, 1.0) = 4.0
+    # kd_target: MSE(3.0, 2.0) = 1.0
+    # kd_emb: MSE(4.0, 5.0) = 1.0
+    s_t = torch.full(size=(1, 3, 5), fill_value=2.0)
+    y = torch.full(size=(1, 3, 5), fill_value=1.0)
+    aux_targets = torch.full(size=(1, 3, 5), fill_value=1.0)
+
+    s_t_f = torch.full(size=(1, 3, 5), fill_value=3.0)
+    e_t = torch.full(size=(1, 3, 10), fill_value=5.0)
+    e_t_f = torch.full(size=(1, 3, 10), fill_value=4.0)
+
+    # Tensors for ODE "physics" (Past & Future)
+    # ode_t: MSE(1.0, 2.0) = 1.0
+    # ode_future_t: MSE(1.0, 0.0) = 1.0
+    # ode_f: MSE(5.0, 3.0) = 4.0
+    # ode_future_f: MSE(3.0, 3.0) = 0.0
+    ds_dt_t_ode = torch.full(size=(1, 3, 5), fill_value=2.0)
+    ds_dt_t_nn = torch.full(size=(1, 3, 5), fill_value=1.0)
+
+    ds_dt_future_t_ode = torch.full(size=(1, 3, 5), fill_value=0.0)
+    ds_dt_future_t_nn = torch.full(size=(1, 3, 5), fill_value=1.0)
+
+    ds_dt_f_ode = torch.full(size=(1, 3, 5), fill_value=3.0)
+    ds_dt_f_nn = torch.full(size=(1, 3, 5), fill_value=5.0)
+
+    ds_dt_future_f_ode = torch.full(size=(1, 3, 5), fill_value=3.0)
+    ds_dt_future_f_nn = torch.full(size=(1, 3, 5), fill_value=3.0)
+
+    # Monotonicity Loss
+    # SEIRM inc_indices [3, 4] MUST increase. 2.0 is > 0 -> Penalty: 0.0
+    # SEIRM dec_indices [0] MUST decrease. 2.0 is NOT < 0.
+    # Penalty calculation: (val * relu(val))^2 -> (2.0 * 2.0)^2 = 16.0
+    # mono = 16.0
+
+    # Parameter Smoothness Loss
+    # Sequence of 3 timesteps: 1.0 -> 2.0 -> 3.0.
+    # Squared differences are 1.0. Mean is 1.0.
+    # param = 1.0
+    params = torch.tensor(data=[[
+        [1.0, 1.0, 1.0, 1.0],
+        [2.0, 2.0, 2.0, 2.0],
+        [3.0, 3.0, 3.0, 3.0]
+    ]], dtype=torch.float32)
+
+    network_outputs = NetworkOutputs(
+        s_t=s_t, e_t=e_t, s_t_F=s_t_f, e_t_F=e_t_f,
+        ds_dt_T_nn=ds_dt_t_nn, ds_dt_T_ode=ds_dt_t_ode,
+        ds_dt_future_T_nn=ds_dt_future_t_nn, ds_dt_future_T_ode=ds_dt_future_t_ode,
+        ds_dt_F_nn=ds_dt_f_nn, ds_dt_F_ode=ds_dt_f_ode,
+        ds_dt_future_F_nn=ds_dt_future_f_nn, ds_dt_future_F_ode=ds_dt_future_f_ode,
+        params=params
+    )
+
+    phase_context = PhaseContext(
+        phase_num=4, epoch=1,
+        x=torch.zeros(size=(1, 3, 5)),
+        y=y,
+        t=torch.zeros(size=(1, 3, 1)),
+        aux_targets=aux_targets,
+        models=None
+    )
+
+    total_loss = loss_calculator_seirm(phase_context=phase_context, network_outputs=network_outputs)
+
+    # 15.0 (Standard Losses) + 16.0 (Monotonicity) = 31.0
+    expected_total = torch.tensor(data=31.0, dtype=torch.float32)
+
+    assert torch.allclose(input=total_loss, other=expected_total, atol=1e-5), \
+        f"Aggregated loss was {total_loss.item()}, but expected {expected_total.item()}."
