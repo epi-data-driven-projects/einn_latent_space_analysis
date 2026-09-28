@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Dict
 
 
 @dataclass
@@ -12,9 +13,11 @@ class TrainingMetrics:
     :param int rep: The current repetition (iteration) number within the specified training phase.
     :param float total_loss: The aggregated composite scalar loss, averaged over all
                              processed batches during this specific repetition.
+    :param Dict[str, float] loss_components: Contains all the loss components
     """
     epoch: int
     phase: int
     rep: int
 
     total_loss: float
+    loss_components: Dict[str, float] = field(default_factory=dict)
