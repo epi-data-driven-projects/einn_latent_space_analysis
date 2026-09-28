@@ -65,12 +65,13 @@ class BasePhaseOptimizer(ABC):
         """
         pass
 
-    def step(self, context: PhaseContext) -> float:
+    def step(self, context: PhaseContext) -> tuple[float, dict[str, float]]:
         """
         Executes a full optimization iteration: Forward -> Loss -> Backward -> Step.
 
         :param PhaseContext context: The current phase state and data batch.
-        :return float: The calculated scalar loss value for logging.
+        :return tuple[float, dict[str, float]]: The calculated scalar loss value for logging and the
+         dictionary for loss components.
         """
         if self.optimizer is None:
             raise RuntimeError("Optimizer was not initialized in the child class.")
@@ -85,12 +86,12 @@ class BasePhaseOptimizer(ABC):
         network_outputs = self.engine.forward(context=context)
 
         # Calculate loss
-        loss = self.loss_calculator(phase_context=context, network_outputs=network_outputs)
+        total_loss, loss_dict = self.loss_calculator(phase_context=context, network_outputs=network_outputs)
 
         # Backward pass
-        loss.backward()
+        total_loss.backward()
 
         # Update weights
         self.optimizer.step()
 
-        return loss.item()
+        return total_loss.item(), loss_dict
