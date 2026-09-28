@@ -96,6 +96,7 @@ class EINNTrainer:
 
         for rep in range(1, reps + 1):
             total_epoch_loss = 0.0
+            epoch_loss_components = {}
             batches_count = 0
 
             for batch_data in dataloader:
@@ -111,17 +112,25 @@ class EINNTrainer:
                 )
 
                 # Execute the full forward-backward pipeline and retrieve the scalar total loss
-                batch_loss = optimizer.step(context=context)
+                batch_loss, batch_loss_components = optimizer.step(context=context)
 
                 total_epoch_loss += batch_loss
+
+                for key, value in batch_loss_components.items():
+                    epoch_loss_components[key] = epoch_loss_components.get(key, 0.0) + value
+
                 batches_count += 1
 
             # Average the loss across all batches processed
             avg_loss = total_epoch_loss / max(1, batches_count)
+            avg_components = {k: v / max(1, batches_count) for k, v in epoch_loss_components.items()}
 
             metrics = TrainingMetrics(
-                epoch=epoch, phase=phase_num, rep=rep,
-                total_loss=avg_loss
+                epoch=epoch,
+                phase=phase_num,
+                rep=rep,
+                total_loss=avg_loss,
+                loss_components=avg_components
             )
             metrics_list.append(metrics)
 
