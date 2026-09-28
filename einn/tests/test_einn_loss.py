@@ -110,7 +110,7 @@ def test_forward_phase_routing(loss_calculator_seirm: EINNLoss):
         models=None
     )
 
-    loss = loss_calculator_seirm(phase_context=context, network_outputs=network_outputs)
+    loss, loss_dict = loss_calculator_seirm(phase_context=context, network_outputs=network_outputs)
     assert isinstance(loss, torch.Tensor), "Forward pass must return a Tensor."
     assert not torch.isnan(input=loss), "Loss computation resulted in NaN."
 
