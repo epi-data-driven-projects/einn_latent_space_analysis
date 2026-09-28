@@ -34,7 +34,7 @@ def integrated_components() -> dict:
     )
 
     engine = EINNForwardEngine(train_config=train_config)
-    loss_calc = EINNLoss(config=train_config, ode_model=models.ode_model, model_type="SEIRM")
+    loss_calc = EINNLoss(config=train_config, ode_model=models.ode_model)
 
     # Mock Data for the PhaseContext
     t_full = torch.rand(size=(2, 10, 1))
@@ -261,7 +261,7 @@ def test_optimizer_full_integration_step(integrated_components: dict):
     initial_weights = integrated_components["models"].output_module.net[0].weight.clone()
 
     # Execute a full optimization step
-    loss_value = opt1.step(context=integrated_components["context"])
+    loss_value, loss_dict = opt1.step(context=integrated_components["context"])
 
     # Validations
     assert isinstance(loss_value, float), "The step method must return a float loss value."
@@ -321,7 +321,7 @@ def test_sequential_phase_optimizer_integration():
         # Execute 1 step (forward, loss, backward, step)
         try:
             # We use float() to extract the scalar value if it's a 0-dim tensor
-            loss_value = float(opt.step(context=context))
+            loss_value, loss_dict = opt.step(context=context)
         except Exception as e:
             pytest.fail(f"Phase {phase_idx} failed during sequential execution with error: {str(e)}")
 
