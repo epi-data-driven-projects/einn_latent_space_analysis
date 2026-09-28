@@ -15,6 +15,11 @@ class SIRModel(BaseODEModel):
         """
         super().__init__()
 
+        self.monotonicity_indices = {
+            "decreasing": [0],  # Susceptible
+            "increasing": [2]  # Recovered
+        }
+
     def init_params(self, param_dict: dict):
         """
         Initializes the raw parameters for beta and gamma using inverse tanh scaling.
@@ -53,6 +58,5 @@ class SIRModel(BaseODEModel):
 
         return ODESolution(
             ds_dt=ds_dt_tensor,
-            params=params,
-            t=torch.empty(size=(0,))  # Placeholder for interface compatibility since parameters are not time-dependent
+            params=params
         )
