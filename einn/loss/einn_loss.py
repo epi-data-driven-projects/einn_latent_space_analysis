@@ -141,7 +141,8 @@ class EINNLoss(nn.Module):
 
         :param PhaseContext phase_context: The context object indicating the current phase.
         :param NetworkOutputs network_outputs: Dataclass containing network predictions and derivatives.
-        :return torch.Tensor: The weighted composite loss scalar.
+        :return tuple[torch.Tensor, dict[str, float]]: The weighted composite loss scalar and a dictionary
+            containing the loss components
         """
         total_loss = torch.tensor(data=0.0, dtype=torch.float32, device=phase_context.t.device)
         loss_dict = {}
