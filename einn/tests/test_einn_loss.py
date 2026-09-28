@@ -148,7 +148,7 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
     )
 
     # In Phase 1: data_T (2.0) + aux (3.0) -> Expected results: 5.0
-    loss_phase1 = loss_calculator(phase_context=context_phase1, network_outputs=network_outputs)
+    loss_phase1, _ = loss_calculator(phase_context=context_phase1, network_outputs=network_outputs)
     assert torch.allclose(input=loss_phase1, other=torch.tensor(data=5.0)), \
         "Phase 1 accumulated loss does not match the configured weights."
 
@@ -254,7 +254,7 @@ def test_knowledge_distillation_gradient_isolation(loss_calculator_seirm: EINNLo
         loss_calculator_seirm.weights['kd_target'] = kd_weight
         loss_calculator_seirm.weights['kd_emb'] = kd_weight
 
-        total_loss = loss_calculator_seirm(phase_context=context, network_outputs=network_outputs)
+        total_loss, _ = loss_calculator_seirm(phase_context=context, network_outputs=network_outputs)
         total_loss.backward()
 
         return (
@@ -291,10 +291,10 @@ def test_all_loss_components_aggregation(loss_calculator_seirm: EINNLoss):
     """
     # 1. Minden kulcs csupa kisbetű, és bekerült mindkét (t és f) ode_future!
     loss_calculator_seirm.weights = {
-        'data_t': 1.0, 'aux': 1.0, 'mono': 1.0,
-        'ode_t': 1.0, 'ode_future_t': 1.0, 'param': 1.0,
-        'data_f': 1.0, 'kd_target': 1.0, 'kd_emb': 1.0,
-        'ode_f': 1.0, 'ode_future_f': 1.0
+        'data_T': 1.0, 'aux': 1.0, 'mono': 1.0,
+        'ode_T': 1.0, 'ode_future_T': 1.0, 'param': 1.0,
+        'data_F': 1.0, 'kd_target': 1.0, 'kd_emb': 1.0,
+        'ode_F': 1.0, 'ode_future_F': 1.0
     }
 
     # Tensors for Data, Aux and Knowledge Distillation
@@ -362,7 +362,7 @@ def test_all_loss_components_aggregation(loss_calculator_seirm: EINNLoss):
         models=None
     )
 
-    total_loss = loss_calculator_seirm(phase_context=phase_context, network_outputs=network_outputs)
+    total_loss, _ = loss_calculator_seirm(phase_context=phase_context, network_outputs=network_outputs)
 
     # 15.0 (Standard Losses) + 16.0 (Monotonicity) = 31.0
     expected_total = torch.tensor(data=31.0, dtype=torch.float32)
