@@ -44,7 +44,7 @@ def integrated_components() -> dict:
     context = PhaseContext(
         phase_num=1,
         epoch=1,
-        X=x_past,
+        x=x_past,
         y=y_past,
         t=t_full,
         aux_targets=torch.rand(size=(2, 7, 5)),
@@ -272,3 +272,67 @@ def test_optimizer_full_integration_step(integrated_components: dict):
     # Prove that optimizer.step() successfully mutated the network's weights
     assert not torch.equal(input=initial_weights, other=updated_weights), \
         "Optimizer failed to update the model weights during the training step."
+
+
+def test_sequential_phase_optimizer_integration():
+    """
+    Chains all 4 phase optimizers sequentially and executes exactly 1 training
+     step (forward + backward + optimize) on each.
+    """
+    # Setup basic configurations and models
+    model_config = EINNModelConfig(d_x=5, d_e=10, d_s=5, d_p=4, feature_n_layers=1)
+    train_config = EINNTrainConfig(device='cpu', learning_rate=0.01)
+
+    models = EINNBuilder.build_einn(
+        model_config=model_config, train_config=train_config,
+        param_calibration={"beta": 0.4, "alpha": 0.2, "gamma": 0.1, "mu": 0.05},
+        model_type="SEIRM", seed=42
+    )
+
+    engine = EINNForwardEngine(train_config=train_config)
+    loss_calculator = EINNLoss(config=train_config, ode_model=models.ode_model)
+
+    # Instantiate all 4 optimizers (representing the trainer's internal state)
+    opt1 = Phase1Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
+    opt2 = Phase2Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
+    opt3 = Phase3Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
+    opt4 = Phase4Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
+
+    # Create a single dummy batch of data
+    batch_size, seq_len = 2, 5
+    x = torch.rand(size=(batch_size, seq_len, 5))
+    y = torch.rand(size=(batch_size, seq_len, 1))
+    t = torch.linspace(0, 1, seq_len).unsqueeze(0).expand(batch_size, -1).unsqueeze(2)
+    aux_targets = torch.rand(size=(batch_size, seq_len, 5))
+
+    optimizers = [opt1, opt2, opt3, opt4]
+    recorded_losses = []
+
+    # Execute 1 step sequentially across all phases
+    for phase_idx, opt in enumerate(optimizers, start=1):
+
+        context = PhaseContext(
+            phase_num=phase_idx,
+            epoch=1,
+            x=x, y=y, t=t, aux_targets=aux_targets,
+            models=models
+        )
+
+        # Execute 1 step (forward, loss, backward, step)
+        try:
+            # We use float() to extract the scalar value if it's a 0-dim tensor
+            loss_value = float(opt.step(context=context))
+        except Exception as e:
+            pytest.fail(f"Phase {phase_idx} failed during sequential execution with error: {str(e)}")
+
+        # Ensure a valid loss was calculated and gradients aren't NaN
+        assert not torch.isnan(torch.tensor(loss_value)), f"Phase {phase_idx} resulted in a NaN loss!"
+        recorded_losses.append(loss_value)
+
+    # Final Assertions
+    assert len(recorded_losses) == 4, "Not all phases completed their step successfully."
+
+    # Ensure models are left in the state defined by Phase 4
+    # (Output and ODE trainable, Time and Feature frozen)
+    assert next(models.output_module.parameters()).requires_grad is True
+    assert next(models.time_module.parameters()).requires_grad is False
