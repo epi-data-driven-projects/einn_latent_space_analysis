@@ -133,7 +133,8 @@ class EINNLoss(nn.Module):
 
         return F.mse_loss(input=prediction, target=target)
 
-    def forward(self, phase_context: PhaseContext, network_outputs: NetworkOutputs) -> torch.Tensor:
+    def forward(self, phase_context: PhaseContext,
+                network_outputs: NetworkOutputs) -> tuple[torch.Tensor, dict[str, float]]:
         """
         Cascading forward pass that aggregates loss components based on the exact
         incremental phases defined in the original EINN training loop.
@@ -143,53 +144,69 @@ class EINNLoss(nn.Module):
         :return torch.Tensor: The weighted composite loss scalar.
         """
         total_loss = torch.tensor(data=0.0, dtype=torch.float32, device=phase_context.t.device)
+        loss_dict = {}
+
+        def add_loss(component_name: str, loss_tensor: torch.Tensor):
+            nonlocal total_loss
+            weight = self.weights.get(component_name, 0.0)
+            if weight > 0:
+                weighted_loss = weight * loss_tensor
+                total_loss += weighted_loss
+                loss_dict[component_name] = weighted_loss.item()
 
         # Phase 1: Train Time Module (Solo Data, Aux & Monotonicity)
         if phase_context.phase_num >= 1:
-            total_loss += self.weights['data_T'] * self.calc_data_loss(
-                states=network_outputs.s_t, targets=phase_context.y
-            )
-            total_loss += self.weights['aux'] * self.calc_aux_loss(
-                states=network_outputs.s_t, aux_targets=phase_context.aux_targets
-            )
-            total_loss += self.weights['mono'] * self.calc_monotonicity_loss(
-                ds_dt=network_outputs.ds_dt_T_ode,
-                inc_indices=self.mono_inc_indices,
-                dec_indices=self.mono_dec_indices
-            )
+            add_loss(component_name='data_T',
+                     loss_tensor=self.calc_data_loss(
+                         states=network_outputs.s_t,
+                         targets=phase_context.y))
+            add_loss(component_name='aux',
+                     loss_tensor=self.calc_aux_loss(
+                         states=network_outputs.s_t,
+                         aux_targets=phase_context.aux_targets))
+            add_loss(component_name='mono',
+                     loss_tensor=self.calc_monotonicity_loss(
+                         ds_dt=network_outputs.ds_dt_T_ode,
+                         inc_indices=self.mono_inc_indices,
+                         dec_indices=self.mono_dec_indices))
 
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:
-            total_loss += self.weights['ode_T'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs.ds_dt_T_nn, ds_dt_ode=network_outputs.ds_dt_T_ode
-            )
-            total_loss += self.weights['ode_future_T'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs.ds_dt_future_T_nn, ds_dt_ode=network_outputs.ds_dt_future_T_ode
-            )
-            total_loss += self.weights['param'] * self.calc_parameter_smoothness_loss(
-                params=network_outputs.params
-            )
+            add_loss(component_name='ode_T',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_T_nn,
+                         ds_dt_ode=network_outputs.ds_dt_T_ode))
+            add_loss(component_name='ode_future_T',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_future_T_nn,
+                         ds_dt_ode=network_outputs.ds_dt_future_T_ode))
+            add_loss(component_name='param',
+                     loss_tensor=self.calc_parameter_smoothness_loss(
+                         params=network_outputs.params))
 
         # Phase 3: Add Feature Module (Data & Knowledge Distillation)
         if phase_context.phase_num >= 3:
-            total_loss += self.weights['data_F'] * self.calc_data_loss(
-                states=network_outputs.s_t_F, targets=phase_context.y
-            )
-            # The .detach() ensures gradients do not flow back into the Time module
-            total_loss += self.weights['kd_target'] * self.calc_knowledge_distillation_loss(
-                target=network_outputs.s_t.detach(), prediction=network_outputs.s_t_F
-            )
-            total_loss += self.weights['kd_emb'] * self.calc_knowledge_distillation_loss(
-                target=network_outputs.e_t.detach(), prediction=network_outputs.e_t_F
-            )
+            add_loss(component_name='data_F',
+                     loss_tensor=self.calc_data_loss(
+                         states=network_outputs.s_t_F, targets=phase_context.y))
+            add_loss(component_name='kd_target',
+                     loss_tensor=self.calc_knowledge_distillation_loss(
+                         target=network_outputs.s_t.detach(),
+                         prediction=network_outputs.s_t_F))
+            add_loss(component_name='kd_emb',
+                     loss_tensor=self.calc_knowledge_distillation_loss(
+                         target=network_outputs.e_t.detach(),
+                         prediction=network_outputs.e_t_F))
 
         # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
-            total_loss += self.weights['ode_F'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs.ds_dt_F_nn, ds_dt_ode=network_outputs.ds_dt_F_ode
-            )
-            total_loss += self.weights['ode_future_F'] * self.calc_ode_loss(
-                ds_dt_nn=network_outputs.ds_dt_future_F_nn, ds_dt_ode=network_outputs.ds_dt_future_F_ode
-            )
+            add_loss(component_name='ode_F',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_F_nn,
+                         ds_dt_ode=network_outputs.ds_dt_F_ode))
+            add_loss(component_name='ode_future_F',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_future_F_nn,
+                         ds_dt_ode=network_outputs.ds_dt_future_F_ode))
 
-        return total_loss
+        return total_loss, loss_dict
