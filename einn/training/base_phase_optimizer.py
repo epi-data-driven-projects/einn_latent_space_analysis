@@ -77,7 +77,7 @@ class BasePhaseOptimizer(ABC):
             raise RuntimeError("Optimizer was not initialized in the child class.")
 
         # Zero gradients
-        self.optimizer.zero_grad(set_to_none=True)
+        self.optimizer.zero_grad()
 
         # Freeze/Unfreeze according to phase rules
         self.prepare_network_states()
