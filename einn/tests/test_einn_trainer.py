@@ -10,14 +10,43 @@ from einn.training.einn_trainer import EINNTrainer
 
 
 @pytest.fixture
-def integrated_trainer_setup() -> dict:
+def einn_configs() -> dict:
     """
-    Fixture providing all initialized components needed to test the EINNTrainer, including a mock dataset.
+    Fixture providing the baseline model and training configurations.
+    Separating this allows other tests to easily access configs without instantiating the full trainer.
 
-    :return dict: Dictionary containing the trainer and the dataset.
+    :return dict: Dictionary containing the model and training configurations.
     """
     model_config = EINNModelConfig(d_x=5, d_e=10, d_s=5, d_p=4, feature_n_layers=1)
-    train_config = EINNTrainConfig(device='cpu', learning_rate=0.01)
+
+    # Default repetitions - these can be dynamically overwritten in specific tests
+    default_reps = {
+        'phase_1': 1,
+        'phase_2': 1,
+        'phase_3': 1,
+        'phase_4': 1
+    }
+
+    # Now injecting the 'reps' directly into the configuration as requested
+    train_config = EINNTrainConfig(device='cpu', learning_rate=0.01, reps=default_reps)
+
+    return {
+        "model_config": model_config,
+        "train_config": train_config
+    }
+
+
+@pytest.fixture
+def integrated_trainer_setup(einn_configs: dict) -> dict:
+    """
+    Fixture providing all initialized components needed to test the EINNTrainer, including a mock dataset.
+    Uses the separated einn_configs fixture.
+
+    :param dict einn_configs: The fixture providing the configuration objects.
+    :return dict: Dictionary containing the trainer, dataset, and configs.
+    """
+    model_config = einn_configs["model_config"]
+    train_config = einn_configs["train_config"]
 
     models = EINNBuilder.build_einn(
         model_config=model_config,
@@ -41,7 +70,8 @@ def integrated_trainer_setup() -> dict:
 
     return {
         "trainer": trainer,
-        "dataset": dummy_dataset
+        "dataset": dummy_dataset,
+        "config": train_config
     }
 
 
@@ -63,22 +93,23 @@ def test_trainer_initialization(integrated_trainer_setup: dict):
 
 def test_trainer_phase_routing_and_reps(integrated_trainer_setup: dict):
     """
-    Verifies that the train() method executes the requested phases and repetitions exactly as specified,
-    and returns a properly structured list of TrainingMetrics.
+    Verifies that the train() method executes the requested phases and repetitions exactly as specified
+    via the configuration, and returns a properly structured list of TrainingMetrics.
 
     :param dict integrated_trainer_setup: The fixture providing the trainer and dataset.
     """
     trainer = integrated_trainer_setup["trainer"]
     dataset = integrated_trainer_setup["dataset"]
 
-    reps = {
+    # Overwrite the default config reps specifically for this test
+    trainer.config.reps = {
         'phase_1': 2,
         'phase_2': 1,
         'phase_3': 0,  # Phase 3 is intentionally skipped
         'phase_4': 1
     }
 
-    metrics = trainer.train(dataset=dataset, epochs=2, reps=reps, batch_size=2)
+    metrics = trainer.train(dataset=dataset, epochs=2, batch_size=2)
 
     # Executions per epoch = 2 + 1 + 0 + 1 = 4 phases run. Total for 2 epochs = 8 metrics.
     assert len(metrics) == 8, f"Expected 8 recorded metrics, got {len(metrics)}."
@@ -102,7 +133,7 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
     trainer = integrated_trainer_setup["trainer"]
     dataset = integrated_trainer_setup["dataset"]
 
-    reps = {
+    trainer.config.reps = {
         'phase_1': 1,
         'phase_2': 0,
         'phase_3': 0,
@@ -111,7 +142,7 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
 
     opt_id_before = id(trainer.opt_phase1.optimizer)
 
-    trainer.train(dataset=dataset, epochs=2, reps=reps, batch_size=2)
+    metrics = trainer.train(dataset=dataset, epochs=2, batch_size=2)
 
     opt_id_after = id(trainer.opt_phase1.optimizer)
 
@@ -122,14 +153,14 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
 def test_trainer_integration_overfitting(integrated_trainer_setup: dict):
     """
     Executes the full trainer pipeline across multiple epochs to prove that the gradients actively flow, weights update,
-     and the total composite loss decreases. This validates the entire end-to-end forward/backward process.
+    and the total composite loss decreases. This validates the entire end-to-end forward/backward process.
 
     :param dict integrated_trainer_setup: The fixture providing the trainer and dataset.
     """
     trainer = integrated_trainer_setup["trainer"]
     dataset = integrated_trainer_setup["dataset"]
 
-    reps = {
+    trainer.config.reps = {
         'phase_1': 1,
         'phase_2': 0,
         'phase_3': 1,
@@ -137,7 +168,7 @@ def test_trainer_integration_overfitting(integrated_trainer_setup: dict):
     }
 
     # Run for 3 epochs to allow the optimizers to take meaningful gradient steps
-    metrics = trainer.train(dataset=dataset, epochs=3, reps=reps, batch_size=2)
+    metrics = trainer.train(dataset=dataset, epochs=3, batch_size=2)
 
     phase1_losses = [m.total_loss for m in metrics if m.phase == 1]
 
@@ -164,6 +195,5 @@ def test_dataloader_context_mapping_integrity(integrated_trainer_setup: dict):
     expected_keys = {'X', 'y', 't', 'aux_targets'}
     actual_keys = set(sample_batch.keys())
 
-    # Lowercase 'x' is explicitly expected based on the user's latest update
     assert expected_keys.issubset(actual_keys), \
         f"Dataset yield keys {actual_keys} do not match the expected PhaseContext keys {expected_keys}."
