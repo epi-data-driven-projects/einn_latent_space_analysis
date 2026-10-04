@@ -80,7 +80,7 @@ class EINNTrainer:
                 phase_optimizer=self.opt_phase4, phase_num=4, reps=reps['phase_4'], epoch=epoch, dataloader=dataloader))
 
         return all_metrics
-    # TODO: datetime adatkimentéshez
+
     def _run_phase(self, phase_optimizer: BasePhaseOptimizer,
                    phase_num: int, reps: int, epoch: int, dataloader: DataLoader) -> List[TrainingMetrics]:
         """
