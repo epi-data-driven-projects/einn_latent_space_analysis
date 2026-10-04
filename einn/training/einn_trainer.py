@@ -9,6 +9,7 @@ from einn.loss.einn_loss import EINNLoss
 from einn.model.interface.einn_models import EINNModels
 from einn.model.interface.phase_context import PhaseContext
 from einn.model.interface.training_metrics import TrainingMetrics
+from einn.training.base_phase_optimizer import BasePhaseOptimizer
 from einn.training.einn_forward_engine import EINNForwardEngine
 from einn.training.phase_optimizers.phase_1_optimizer import Phase1Optimizer
 from einn.training.phase_optimizers.phase_2_optimizer import Phase2Optimizer
@@ -67,25 +68,25 @@ class EINNTrainer:
 
             # Execute phases sequentially based on the provided repetition dictionary
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase1, phase_num=1, reps=reps['phase_1'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase1, phase_num=1, reps=reps['phase_1'], epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase2, phase_num=2, reps=reps['phase_2'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase2, phase_num=2, reps=reps['phase_2'], epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase3, phase_num=3, reps=reps['phase_3'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase3, phase_num=3, reps=reps['phase_3'], epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                optimizer=self.opt_phase4, phase_num=4, reps=reps['phase_4'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase4, phase_num=4, reps=reps['phase_4'], epoch=epoch, dataloader=dataloader))
 
         return all_metrics
-
-    def _run_phase(self, optimizer,
+    # TODO: datetime adatkimentéshez
+    def _run_phase(self, phase_optimizer: BasePhaseOptimizer,
                    phase_num: int, reps: int, epoch: int, dataloader: DataLoader) -> List[TrainingMetrics]:
         """
         Executes a specific optimization phase for a given number of repetitions over the entire dataset.
 
-        :param BasePhaseOptimizer optimizer: The specific optimizer instance handling the current phase.
+        :param BasePhaseOptimizer phase_optimizer: The specific optimizer instance handling the current phase.
         :param int phase_num: The numerical identifier of the current phase (1, 2, 3, or 4).
         :param int reps: The number of times to iterate over the entire dataloader in this phase.
         :param int epoch: The current macroscopic epoch number.
@@ -112,7 +113,7 @@ class EINNTrainer:
                 )
 
                 # Execute the full forward-backward pipeline and retrieve the scalar total loss
-                batch_loss, batch_loss_components = optimizer.step(context=context)
+                batch_loss, batch_loss_components = phase_optimizer.step(context=context)
 
                 total_epoch_loss += batch_loss
 
