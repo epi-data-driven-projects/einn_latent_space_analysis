@@ -48,13 +48,12 @@ class EINNTrainer:
                                           loss_calculator=self.loss_calculator)
 
     def train(self, dataset: EINNDataset,
-              epochs: int, reps: dict[str, int], batch_size: int = 1) -> List[TrainingMetrics]:
+              epochs: int, batch_size: int = 1) -> List[TrainingMetrics]:
         """
         Executes the main training loop across all epochs and phases.
 
         :param EINNDataset dataset: The dataset containing observed inputs, targets, and time vectors.
         :param int epochs: Total number of macroscopic training epochs.
-        :param dict[str, int] reps: Repetition counts for each phase. Expected keys: 'phase_1', 'phase_2', etc.
         :param int batch_size: Size of the sliding window batches.
         :return List[TrainingMetrics]: A chronological list of recorded training metrics.
         """
@@ -68,16 +67,20 @@ class EINNTrainer:
 
             # Execute phases sequentially based on the provided repetition dictionary
             all_metrics.extend(self._run_phase(
-                phase_optimizer=self.opt_phase1, phase_num=1, reps=reps['phase_1'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase1, phase_num=1, reps=self.config.reps['phase_1'],
+                epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                phase_optimizer=self.opt_phase2, phase_num=2, reps=reps['phase_2'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase2, phase_num=2, reps=self.config.reps['phase_2'],
+                epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                phase_optimizer=self.opt_phase3, phase_num=3, reps=reps['phase_3'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase3, phase_num=3, reps=self.config.reps['phase_3'],
+                epoch=epoch, dataloader=dataloader))
 
             all_metrics.extend(self._run_phase(
-                phase_optimizer=self.opt_phase4, phase_num=4, reps=reps['phase_4'], epoch=epoch, dataloader=dataloader))
+                phase_optimizer=self.opt_phase4, phase_num=4, reps=self.config.reps['phase_4'],
+                epoch=epoch, dataloader=dataloader))
 
         return all_metrics
 
