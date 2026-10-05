@@ -10,6 +10,7 @@ from einn.model.interface.einn_models import EINNModels
 from einn.model.interface.phase_context import PhaseContext
 from einn.model.interface.training_metrics import TrainingMetrics
 from einn.training.base_phase_optimizer import BasePhaseOptimizer
+from einn.training.early_stopping import EarlyStopping
 from einn.training.einn_forward_engine import EINNForwardEngine
 from einn.training.phase_optimizers.phase_1_optimizer import Phase1Optimizer
 from einn.training.phase_optimizers.phase_2_optimizer import Phase2Optimizer
@@ -59,6 +60,12 @@ class EINNTrainer:
         """
         all_metrics: List[TrainingMetrics] = []
         dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
+        early_stopping = EarlyStopping(
+            mode='min',
+            min_delta=self.config.early_stopping_min_delta,
+            patience=self.config.early_stopping_patience,
+            percentage=self.config.early_stopping_percentage
+        )
 
         self.logger.info("Starting EINN Training Loop...")
 
@@ -78,9 +85,26 @@ class EINNTrainer:
                 phase_optimizer=self.opt_phase3, phase_num=3, reps=self.config.reps['phase_3'],
                 epoch=epoch, dataloader=dataloader))
 
-            all_metrics.extend(self._run_phase(
+            # Execute phase 4 and explicitly capture the metrics to a separate variable
+            phase4_metrics = self._run_phase(
                 phase_optimizer=self.opt_phase4, phase_num=4, reps=self.config.reps['phase_4'],
-                epoch=epoch, dataloader=dataloader))
+                epoch=epoch, dataloader=dataloader)
+
+            all_metrics.extend(phase4_metrics)
+
+            # Determine which loss to monitor for Early Stopping
+            if len(phase4_metrics) > 0 and 'data_f' in phase4_metrics[-1].loss_components:
+                monitored_loss = phase4_metrics[-1].loss_components['data_f']
+            elif len(all_metrics) > 0:
+                monitored_loss = all_metrics[-1].total_loss
+            else:
+                continue
+
+            should_stop = early_stopping.step(metrics=monitored_loss)
+            if should_stop:
+                self.logger.info(
+                    f"Early Stopping triggered at epoch {epoch}! No improvement for {early_stopping.patience} epochs.")
+                break
 
         return all_metrics
 
