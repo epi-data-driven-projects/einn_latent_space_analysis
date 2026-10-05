@@ -1,12 +1,12 @@
 import torch
 
 
-# code from: https://gist.github.com/stefanonardo/693d96ceb2f531fa05db530f3e21517d
-
 class EarlyStopping(object):
     """
-    Monitors a specified training/validation metric and stops the training process early
-    if the metric stops improving, preventing overfitting and saving computational resources.
+    Monitors a specified training/validation metric and stops the training process early if the metric stops improving,
+     preventing overfitting and saving computational resources.
+
+    The code is from: https://gist.github.com/stefanonardo/693d96ceb2f531fa05db530f3e21517d
     """
     def __init__(self, mode: str = 'min', min_delta: float = 0, patience: int = 10, percentage: bool = False):
 
