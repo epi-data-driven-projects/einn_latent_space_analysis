@@ -142,7 +142,7 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
 
     opt_id_before = id(trainer.opt_phase1.optimizer)
 
-    metrics = trainer.train(dataset=dataset, epochs=2, batch_size=2)
+    _ = trainer.train(dataset=dataset, epochs=2, batch_size=2)
 
     opt_id_after = id(trainer.opt_phase1.optimizer)
 
@@ -239,4 +239,5 @@ def test_trainer_early_stopping_integration(integrated_trainer_setup: dict):
         f"Early stopping failed! Expected to stop before {max_epochs} epochs, but ran for {epochs_executed} epochs."
 
     assert epochs_executed == 3, \
-        f"Early stopping triggered at the wrong time. Expected it to stop exactly at epoch 3, but stopped at {epochs_executed}."
+        f"Early stopping triggered at the wrong time." +\
+        f"Expected it to stop exactly at epoch 3, but stopped at {epochs_executed}."
