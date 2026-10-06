@@ -1,7 +1,7 @@
 import torch
 
 
-class EarlyStopping(object):
+class EarlyStopping:
     """
     Monitors a specified training/validation metric and stops the training process early if the metric stops improving,
      preventing overfitting and saving computational resources.
