@@ -142,7 +142,7 @@ def test_trainer_optimizer_momentum_retention(integrated_trainer_setup: dict):
 
     opt_id_before = id(trainer.opt_phase1.optimizer)
 
-    metrics = trainer.train(dataset=dataset, epochs=2, batch_size=2)
+    _ = trainer.train(dataset=dataset, epochs=2, batch_size=2)
 
     opt_id_after = id(trainer.opt_phase1.optimizer)
 
@@ -197,3 +197,47 @@ def test_dataloader_context_mapping_integrity(integrated_trainer_setup: dict):
 
     assert expected_keys.issubset(actual_keys), \
         f"Dataset yield keys {actual_keys} do not match the expected PhaseContext keys {expected_keys}."
+
+
+def test_trainer_early_stopping_integration(integrated_trainer_setup: dict):
+    """
+    Validates that the EarlyStopping mechanism correctly interrupts the training loop when the monitored metric
+     (e.g., data_f in Phase 4) stops improving according to the configured patience and delta thresholds.
+
+    :param dict integrated_trainer_setup: The fixture providing the trainer and dataset.
+    """
+    trainer = integrated_trainer_setup["trainer"]
+    dataset = integrated_trainer_setup["dataset"]
+
+    # Forceful Configuration for Early Stopping
+    # Set an impossibly high delta so that no normal loss reduction qualifies as an improvement.
+    trainer.config.early_stopping_min_delta = 1000.0
+    trainer.config.early_stopping_patience = 2
+    trainer.config.early_stopping_percentage = False
+
+    # Ensure all phases run so Phase 4 generates the 'data_f' metric
+    trainer.config.reps = {
+        'phase_1': 1,
+        'phase_2': 1,
+        'phase_3': 1,
+        'phase_4': 1
+    }
+
+    max_epochs = 10
+
+    # Execute Training
+    # We ask for 10 epochs, but EarlyStopping should intervene much sooner.
+    metrics = trainer.train(dataset=dataset, epochs=max_epochs, batch_size=2)
+
+    # Extract the maximum epoch actually executed
+    epochs_executed = max([m.epoch for m in metrics]) if metrics else 0
+
+    # Epoch 1: Sets the initial best loss.
+    # Epoch 2: Fails to improve by 1000.0 (bad epoch count = 1).
+    # Epoch 3: Fails to improve by 1000.0 (bad epoch count = 2 >= patience). Stops immediately.
+    assert epochs_executed < max_epochs, \
+        f"Early stopping failed! Expected to stop before {max_epochs} epochs, but ran for {epochs_executed} epochs."
+
+    assert epochs_executed == 3, \
+        f"Early stopping triggered at the wrong time." +\
+        f"Expected it to stop exactly at epoch 3, but stopped at {epochs_executed}."
