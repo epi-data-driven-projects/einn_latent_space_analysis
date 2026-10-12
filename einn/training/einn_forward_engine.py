@@ -87,13 +87,21 @@ class EINNForwardEngine:
         # t_grad covers the ENTIRE sequence (past + future steps)
         t_grad = context.t.clone().detach().requires_grad_(True)
 
+        # Insert scaling values (if they exist)
+        # TODO: EINNTrainConfig-ba be kell tenni ezeket
+        aux_mean = getattr(self.config, 'aux_mean', torch.tensor(0.0)).to(t_grad.device)
+        aux_std = getattr(self.config, 'aux_std', torch.tensor(1.0)).to(t_grad.device)
+
         # Phases 1-4: Time Module forward and derivatives
         e_t_full = models.time_module(t=t_grad)
         s_t_full = models.output_module(e=e_t_full)
 
         ds_t_dt_nn_full = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_grad)
-        ode_solution_full = models.ode_model.get_derivatives(states=s_t_full, detach_params=False)
-        ds_t_dt_ode_full = ode_solution_full.ds_dt
+        # Transform back to the real space
+        s_t_full_real = (s_t_full * aux_std) + aux_mean
+        ode_solution_full = models.ode_model.get_derivatives(states=s_t_full_real, detach_params=False)
+
+        ds_t_dt_ode_full = ode_solution_full.ds_dt / aux_std
 
         # Slicing the past steps into NetworkOutputs
         out.e_t = e_t_full[:, :past_steps, :]
@@ -138,8 +146,10 @@ class EINNForwardEngine:
             ds_dt_f_nn_full = self._compute_feature_gradient_trick(
                 s_t_f=s_t_f_grad_full, e_t_f_grad=e_t_f_grad_full, de_dt=de_dt_full
             )
-            ds_dt_f_ode_full = models.ode_model.get_derivatives(states=s_t_f_grad_full, detach_params=True).ds_dt
 
+            s_t_f_grad_full_real = (s_t_f_grad_full * aux_std) + aux_mean
+            ds_dt_f_ode_full = models.ode_model.get_derivatives(states=s_t_f_grad_full_real,
+                                                                detach_params=True).ds_dt / aux_std
             # Populating current steps
             out.ds_dt_F_nn = ds_dt_f_nn_full[:, :past_steps, :]
             out.ds_dt_F_ode = ds_dt_f_ode_full[:, :past_steps, :]
