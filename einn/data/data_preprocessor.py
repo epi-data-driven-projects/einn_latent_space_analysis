@@ -5,6 +5,12 @@ from typing import Dict
 
 
 class DataPreprocessor:
+    """
+    Handles Z-score normalization for all EINN inputs and targets.
+    Crucially, it stores the scaling statistics so the EINN can inverse-transform
+    the latent states back to the biological domain BEFORE feeding them to the ODE.
+    """
+
     def __init__(self):
         self.x_scaler = StandardScaler()
         self.y_scaler = StandardScaler()
@@ -12,11 +18,15 @@ class DataPreprocessor:
 
         self.aux_mean: torch.Tensor | None = None
         self.aux_std: torch.Tensor | None = None
+        self.y_mean: torch.Tensor | None = None
+        self.y_std: torch.Tensor | None = None
 
     def fit_transform(self, x_raw: np.ndarray, y_raw: np.ndarray, aux_raw: np.ndarray, target_idx: int) -> Dict[
         str, torch.Tensor]:
-        # 1. A TRÜKK: Az offline ODE kalibráció (aux_raw) célváltozó oszlopát
-        # felülírjuk a hajszálpontos valós adatokkal (y_raw), ahogy az eredeti cikk tette!
+        """
+        Scales the raw data matrices and replaces the target compartment in aux_targets with real incidence data.
+        """
+        # 1. TRÜKK: Kumulatív rekesz felülírása a napi incidenciával (S_rmse[:, target_idx] = y_raw)
         aux_raw_modified = aux_raw.copy()
         aux_raw_modified[:, target_idx] = y_raw.ravel()
 
@@ -25,13 +35,14 @@ class DataPreprocessor:
         y_scaled = self.y_scaler.fit_transform(y_raw)
         aux_scaled = self.aux_scaler.fit_transform(aux_raw_modified)
 
-        # 3. Kimentjük az aux (fizikai rekeszek) szórását és átlagát a Loss függvény számára!
-        # Ez kritikus a fizikai egyenletekhez való visszatranszformáláshoz.
+        # 3. Skálázási statisztikák (mean, std) kimentése tenzorként az inverz transzformációhoz
         self.aux_mean = torch.tensor(self.aux_scaler.mean_, dtype=torch.float32)
-        # Hozzáadunk egy pici epszilont, hogy sose osszunk nullával
-        self.aux_std = torch.tensor(self.aux_scaler.scale_ + 1e-7, dtype=torch.float32)
+        self.aux_std = torch.tensor(self.aux_scaler.scale_ + 1e-8, dtype=torch.float32)  # +1e-8 a nullával osztás ellen
 
-        # 4. Idővektor (t) [0, 1] tartományra
+        self.y_mean = torch.tensor(self.y_scaler.mean_, dtype=torch.float32)
+        self.y_std = torch.tensor(self.y_scaler.scale_ + 1e-8, dtype=torch.float32)
+
+        # 4. Idővektor (t) [0, 1] tartományra normalizálása a stabil deriváláshoz
         t_raw = np.arange(len(x_raw)).reshape(-1, 1)
         t_scaled = (t_raw - t_raw.min()) / (t_raw.max() - t_raw.min() + 1e-8)
 
