@@ -28,21 +28,18 @@ class EINNLoss(nn.Module):
         self.mono_dec_indices = self.ode_model.monotonicity_indices["decreasing"]
         self.mono_inc_indices = self.ode_model.monotonicity_indices["increasing"]
 
-    @staticmethod
-    def calc_data_loss(states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def calc_data_loss(self, states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
-        Calculates the Mean Squared Error (MSE) between predicted states and observed data.
-        Assumes targets map to the first dim(targets) compartments (e.g., Infected).
-
-        :param torch.Tensor states: Predicted compartment states. Shape: [Batch, Seq_len, d_s].
-        :param torch.Tensor targets: Ground truth observations. Shape: [Batch, Seq_len, target_dim].
-        :return torch.Tensor: Data MSE loss.
+        Calculates the Mean Squared Error (MSE) between predicted states and observed data
+        using the specific target_idx defined in the ODE model.
         """
         if states.numel() == 0 or targets.numel() == 0:
             return torch.tensor(data=0.0, dtype=torch.float32, device=states.device)
 
-        target_dim = targets.shape[2]
-        return F.mse_loss(input=states[:, :, :target_dim], target=targets)
+        # Helyes indexelés: kivágjuk a Célváltozó (pl. 'I') egyetlen oszlopát
+        idx = self.ode_model.target_idx
+
+        return F.mse_loss(input=states[:, :, idx:idx + 1], target=targets)
 
     @staticmethod
     def calc_aux_loss(states: torch.Tensor, aux_targets: torch.Tensor) -> torch.Tensor:

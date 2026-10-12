@@ -26,7 +26,8 @@ class InferenceEngine:
             historical_x_mask: torch.Tensor,
             future_t: torch.Tensor,
             z_mean: torch.Tensor | None = None,
-            z_std: torch.Tensor | None = None
+            z_std: torch.Tensor | None = None,
+            t_max: float | None = None
     ) -> torch.Tensor:
         """
         Generates future predictions based on a window of historical data and future time steps.
@@ -44,6 +45,9 @@ class InferenceEngine:
 
         with torch.no_grad():
             # Feature Module obtains the embedding
+            if t_max is not None:
+                future_t = future_t / (t_max + 1e-8)
+
             embedding = self.models.feature_module(
                 x=historical_x,
                 t=future_t,

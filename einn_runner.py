@@ -12,7 +12,7 @@ from einn.model.einn_builder import EINNBuilder
 from einn.model.interface.einn_models import EINNModels
 from einn.model.interface.training_metrics import TrainingMetrics
 from einn.ode.base_ode_model import BaseODEModel
-from einn.ode.seirm_model import SEIRMModel
+from einn.ode.sir_model import SIRModel
 from einn.inference.training_post_processor import TrainingPostProcessor
 from einn.training.einn_trainer import EINNTrainer
 
@@ -93,17 +93,27 @@ class EINNRunner:
         self.logger.info(f"Dataset létrehozva. Csúszóablakok száma: {len(dataset)}")
 
         self.logger.info("=== 4. FÁZIS: EINN Modellek Inicializálása ===")
-        # A paramétereket nagyjából a valósághoz közeli, de nem tökéletes értékekről indítjuk
+
+        # Dinamikus paraméterek az ODE inicializálásához
+        if assumed_d_p == 2:
+            model_t = "SIR"
+            init_params = {"beta": 0.3, "gamma": 0.1}
+        else:
+            model_t = "SEIRM"
+            init_params = {"beta": 0.3, "alpha": 0.2, "gamma": 0.1, "mu": 0.05}
+
+        # Buildeljük a neurális hálózatokat az EINNBuilder-rel dinamikusan
         models = EINNBuilder.build_einn(
             model_config=self.model_config,
             train_config=self.train_config,
-            param_calibration={"beta": 0.3, "alpha": 0.1, "gamma": 0.1, "mu": 0.01},
-            model_type="SEIRM",
+            param_calibration=init_params,
+            model_type=model_t,
             seed=42
         )
-        # JAVÍTÁS: Célváltozó indexének biztonságos átadása felülírás nélkül
+
+        # A target_idx biztonságos átadása a kutatói feltevésből
         models.ode_model.target_idx = assumed_model.target_idx
-        self.logger.info("Modellek sikeresen inicializálva.")
+        self.logger.info(f"Modellek sikeresen inicializálva ({model_t} ODE motorral).")
 
         self.logger.info("=== 5. FÁZIS: EINN Hálózat Tanítása ===")
         trainer = EINNTrainer(models=models, config=self.train_config)
@@ -130,7 +140,8 @@ class EINNRunner:
             historical_x_mask=None,
             future_t=full_t,
             z_mean=preprocessor.aux_mean,
-            z_std=preprocessor.aux_std
+            z_std=preprocessor.aux_std,
+            t_max=self.train_config.t_max
         )
 
         pred_np = predicted_states.squeeze(0).cpu().numpy()
@@ -143,54 +154,65 @@ class EINNRunner:
 
 
 # ==========================================
-# FŐPROGRAM (MAIN)
+# SANITY CHECK: Működik-e egyáltalán a hálózat?
 # ==========================================
 if __name__ == "__main__":
-    true_physics = SEIRMModel(target_idx=4)
-    assumed_physics = SEIRMModel(target_idx=4)
+    # 1. A legkönnyebb adat: SIR modell (3 rekesz, 2 paraméter)
+    true_physics = SIRModel(target_idx=1)
 
-    # FIGYELEM: d_x = 5 lett az új 4 exogén változó + 1 zajos esetszám miatt!
+    # Nincs strukturális hiba: a hálózat is SIR modellt feltételez!
+    assumed_physics = SIRModel(target_idx=1)
+
     model_cfg = EINNModelConfig(
         d_x=5,
         d_e=32,
-        d_s=5,
-        d_p=4,
+        d_s=3,  # SIR miatt 3 rekesz!
+        d_p=2,  # SIR miatt 2 paraméter!
         feature_n_layers=2
     )
 
     train_cfg = EINNTrainConfig(
         device='cpu',
-        learning_rate=1e-3,
-        epochs_per_phase=1000,
+        learning_rate=0.002,  # Visszavettük az ugrálások megszüntetésére
+        epochs_per_phase=500,
         early_stopping_patience=40,
-        early_stopping_min_delta=1e-5,
         reps={
-            'phase_1': 2, 'phase_2': 1, 'phase_3': 2, 'phase_4': 1
+            'phase_1': 1, 'phase_2': 1, 'phase_3': 1, 'phase_4': 1
         },
         loss_weights={
-            'data_T': 10.0, 'data_F': 10.0,
+            # Az adat és az offline kalibráció adja az alapot
+            'data_T': 1.0, 'data_F': 1.0,
+            'aux': 1.0,
+
+            # A FIZIKA VISSZAKAPCSOLÁSA (Kisebb súllyal)
+            # Ez fogja "letörni" az S-t és "felemelni" az R-t az I hatására!
             'ode_T': 0.1, 'ode_F': 0.1,
+
+            # Jövőbeli ODE egyelőre maradjon nagyon pici
             'ode_future_T': 0.01, 'ode_future_F': 0.01,
+
+            # Monotonitás bekapcsolása (S csak csökkenhet, R csak nőhet)
+            'mono': 0.5,
+            'param': 0.01,
+
             'kd_target': 1.0, 'kd_emb': 1.0,
-            'mono': 2.0, 'param': 0.1,
-            'aux': 10.0
         }
     )
 
     runner = EINNRunner(
-        output_dir="./experiment_results/baseline_seirm_rich_data",
+        output_dir="./experiment_results/sanity_check_sir",
         model_config=model_cfg,
         train_config=train_cfg
     )
 
     runner.run_experiment(
         true_model=true_physics,
-        true_initial_states=[0.99, 0.01, 0.0, 0.0, 0.0],
-        true_params=[0.4, 0.2, 0.1, 0.05],
+        true_initial_states=[0.99, 0.01, 0.0],  # S, I, R
+        true_params=[0.3, 0.1],
         assumed_model=assumed_physics,
-        assumed_d_p=4,
-        seq_len=300,  # Hosszabb idősor, hogy kifusson a járvány (300 nap)
-        window_size=14,
-        epochs=80,
-        batch_size=16
+        assumed_d_p=2,
+        seq_len=200,
+        window_size=200,
+        epochs=100,
+        batch_size=1
     )

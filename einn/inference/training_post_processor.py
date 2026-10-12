@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import List
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 from einn.model.interface.einn_models import EINNModels
@@ -122,3 +123,38 @@ class TrainingPostProcessor:
         plt.close()
 
         print(f"Veszteséggörbék grafikonja elmentve ide: {filepath}")
+
+    def plot_true_vs_predicted(self, true_states: np.ndarray, predicted_states: np.ndarray,
+                               filename: str = "true_vs_predicted.png") -> None:
+        """
+        Kirajzolja az igazi (szimulált) rekeszeket és a modell által becsült rekeszeket.
+        """
+        if not true_states.shape == predicted_states.shape:
+            print(f"Hiba a rajzolásnál: eltérő dimenziók! True: {true_states.shape}, Pred: {predicted_states.shape}")
+            return
+
+        d_s = true_states.shape[1]
+        fig, axes = plt.subplots(nrows=d_s, ncols=1, figsize=(10, 2.5 * d_s), sharex=True)
+
+        # Címkék SIR (3) vagy SEIRM (5) esetére
+        labels = ['Susceptible (S)', 'Exposed (E)', 'Infected (I)', 'Recovered (R)', 'Mortality (M)'] if d_s == 5 else [
+            'Susceptible (S)', 'Infected (I)', 'Recovered (R)']
+
+        for i in range(d_s):
+            ax = axes[i] if d_s > 1 else axes
+            # Valóság (Fekete)
+            ax.plot(true_states[:, i], label=f'True {labels[i]}', color='black', linewidth=2)
+            # Predikció (Piros, szaggatott)
+            ax.plot(predicted_states[:, i], label=f'Predicted {labels[i]}', color='red', linestyle='--', linewidth=2)
+            ax.set_ylabel('Populáció aránya')
+            ax.grid(True, linestyle=':', alpha=0.6)
+            ax.legend(loc='upper right')
+
+        plt.xlabel('Napok (Időlépések)')
+        plt.suptitle('Valós (Ground Truth) vs. Becsült (Predicted) Látens Állapotok', fontsize=14)
+        plt.tight_layout()
+
+        filepath = os.path.join(self.output_dir, filename)
+        plt.savefig(filepath, dpi=300)
+        plt.close()
+        print(f"Valós vs. Becsült görbék ábrája elmentve ide: {filepath}")

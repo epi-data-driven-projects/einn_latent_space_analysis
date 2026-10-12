@@ -21,6 +21,8 @@ class DataPreprocessor:
         self.y_mean: torch.Tensor | None = None
         self.y_std: torch.Tensor | None = None
 
+        self.t_max = None
+
     def fit_transform(self, x_raw: np.ndarray, y_raw: np.ndarray, aux_raw: np.ndarray, target_idx: int) -> Dict[
         str, torch.Tensor]:
         """
@@ -42,13 +44,14 @@ class DataPreprocessor:
         self.y_mean = torch.tensor(self.y_scaler.mean_, dtype=torch.float32)
         self.y_std = torch.tensor(self.y_scaler.scale_ + 1e-8, dtype=torch.float32)
 
-        # 4. Idővektor (t) [0, 1] tartományra normalizálása a stabil deriváláshoz
-        t_raw = np.arange(len(x_raw)).reshape(-1, 1)
-        t_scaled = (t_raw - t_raw.min()) / (t_raw.max() - t_raw.min() + 1e-8)
+        t_unscaled = np.arange(len(x_raw)).reshape(-1, 1)
+
+        # Mentsük el a maximumot egy tenzorba a Forward Engine számára
+        self.t_max = torch.tensor(t_unscaled.max(), dtype=torch.float32)
 
         return {
             "x": torch.tensor(x_scaled, dtype=torch.float32),
             "y": torch.tensor(y_scaled, dtype=torch.float32),
-            "t": torch.tensor(t_scaled, dtype=torch.float32),
+            "t": torch.tensor(t_unscaled, dtype=torch.float32),  # Nyers idő megy a Datasetbe!
             "aux_targets": torch.tensor(aux_scaled, dtype=torch.float32)
         }

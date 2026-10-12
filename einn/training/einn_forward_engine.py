@@ -88,12 +88,16 @@ class EINNForwardEngine:
         t_grad = context.t.clone().detach().requires_grad_(True)
 
         # Insert scaling values (if they exist)
-        # TODO: EINNTrainConfig-ba be kell tenni ezeket
         aux_mean = getattr(self.config, 'aux_mean', torch.tensor(0.0)).to(t_grad.device)
         aux_std = getattr(self.config, 'aux_std', torch.tensor(1.0)).to(t_grad.device)
+        t_max = getattr(self.config, 't_max', torch.tensor(1.0)).to(t_grad.device)
+
+        # A HÁLÓZATBA BEMENŐ IDŐ SKÁLÁZÁSA [0, 1] KÖZÉ
+        # Mivel t_grad-ból számoljuk, a PyTorch autograd tudni fogja a láncszabályt!
+        t_scaled = t_grad / (t_max + 1e-8)
 
         # Phases 1-4: Time Module forward and derivatives
-        e_t_full = models.time_module(t=t_grad)
+        e_t_full = models.time_module(t=t_scaled)
         s_t_full = models.output_module(e=e_t_full)
 
         ds_t_dt_nn_full = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_grad)
@@ -128,7 +132,7 @@ class EINNForwardEngine:
         if context.phase_num >= 3:
             # Feature module requires x, t, and mask
             # It inherently decodes the entire sequence (past + future) provided in t_grad
-            e_t_f_full = models.feature_module(x=x_input, t=t_grad, mask=None)
+            e_t_f_full = models.feature_module(x=x_input, t=t_scaled, mask=None)
             s_t_f_full = models.output_module(e=e_t_f_full)
 
             # Slicing the past steps for the feature module targets
