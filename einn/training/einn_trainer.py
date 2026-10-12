@@ -132,7 +132,7 @@ class EINNTrainer:
                 context = PhaseContext(
                     phase_num=phase_num,
                     epoch=epoch,
-                    x=batch_data['X'],
+                    x=batch_data['x'],
                     y=batch_data['y'],
                     t=batch_data['t'],
                     aux_targets=batch_data['aux_targets'],

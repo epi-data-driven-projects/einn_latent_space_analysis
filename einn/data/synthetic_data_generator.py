@@ -59,7 +59,8 @@ class SyntheticDataGenerator:
 
         # 2. A célváltozó kiválasztása a dinamikus target_idx alapján
         # Ha a BaseODEModel-ben kötelezővé tettük a target_idx-et, itt már biztosan létezik
-        target_idx = self.true_ode_model.target_idx
+        # ÚJ, BIZTONSÁGOS SOR (ezt másold be):
+        target_idx = getattr(self.true_ode_model, 'target_idx', d_s - 1)
         pure_y = states[:, target_idx:target_idx + 1]
 
         # 3. Zajosítás: A valós világban a mérések pontatlanok

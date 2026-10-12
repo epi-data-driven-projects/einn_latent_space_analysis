@@ -46,6 +46,7 @@ class EINNDataset(Dataset):
         """
         Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
         """
+        # TODO: add docstring
         if x.dim() == 3 and x.size(0) == 1:
             x = x.squeeze(0)
             y = y.squeeze(0)
@@ -72,7 +73,7 @@ class EINNDataset(Dataset):
         end_idx = idx + self.window_size
 
         return {
-            'X': self.x[start_idx:end_idx],
+            'x': self.x[start_idx:end_idx],
             'y': self.y[start_idx:end_idx],
             't': self.t[start_idx:end_idx],
             'aux_targets': self.aux_targets[start_idx:end_idx]

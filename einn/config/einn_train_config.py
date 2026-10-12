@@ -48,3 +48,6 @@ class EINNTrainConfig:
         'kd_target': 1.0,
         'kd_emb': 5.0
     })
+
+    aux_mean: float = 0.0
+    aux_std: float = 1.0
