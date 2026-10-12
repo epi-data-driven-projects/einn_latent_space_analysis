@@ -1,6 +1,5 @@
 import os
 import logging
-import numpy as np
 from typing import List, Tuple
 
 from einn.config.einn_model_config import EINNModelConfig
@@ -81,6 +80,7 @@ class EINNRunner:
 
         self.train_config.aux_mean = preprocessor.aux_mean
         self.train_config.aux_std = preprocessor.aux_std
+        self.train_config.t_max = preprocessor.t_max
 
         dataset = EINNDataset(
             x=batch_dict["x"],
@@ -111,74 +111,86 @@ class EINNRunner:
 
         self.logger.info("=== 6. FÁZIS: Utófeldolgozás és Mentés ===")
         post_processor = TrainingPostProcessor(output_dir=self.output_dir)
-        post_processor.save_models(models=models, prefix="einn_baseline")
+        post_processor.save_models(models=models, prefix="einn_experiment")
         post_processor.save_metrics(metrics=metrics)
-        post_processor.plot_loss_curves(metrics=metrics, filename="baseline_loss_curves.png")
+        post_processor.plot_loss_curves(metrics=metrics, filename="loss_curves.png")
 
-        np.save(os.path.join(self.output_dir, "true_latent_states.npy"), data_dict["true_latent_states"])
+        self.logger.info("=== 7. FÁZIS: Predikció és Valóság Összehasonlítása ===")
+        from einn.inference.inference_engine import InferenceEngine
+
+        engine = InferenceEngine(models)
+
+        # A Batch dimenzió hozzáadása a teljes idősorhoz [1, Seq_len, Features]
+        full_x = batch_dict["x"].unsqueeze(0).to(self.train_config.device)
+        full_t = batch_dict["t"].unsqueeze(0).to(self.train_config.device)
+
+        # Predikció lekérése a Feature Modulon keresztül (Az InferenceEngine visszaskálázza a valós térbe)
+        predicted_states = engine.predict_future(
+            historical_x=full_x,
+            historical_x_mask=None,
+            future_t=full_t,
+            z_mean=preprocessor.aux_mean,
+            z_std=preprocessor.aux_std
+        )
+
+        pred_np = predicted_states.squeeze(0).cpu().numpy()
+        true_np = data_dict["true_latent_states"]
+
+        post_processor.plot_true_vs_predicted(true_states=true_np, predicted_states=pred_np)
 
         self.logger.info(f"Kísérlet befejezve! Eredmények a(z) {self.output_dir} mappában.")
         return models, metrics, preprocessor
 
 
+# ==========================================
+# FŐPROGRAM (MAIN)
+# ==========================================
 if __name__ == "__main__":
-    # ---------------------------------------------------------
-    # TÖKÉLETES BASELINE BEÁLLÍTÁS (VALÓSÁG == FELTEVÉS)
-    # ---------------------------------------------------------
-
-    # Valóság: SEIRM modell, Célváltozó: Mortalitás (index: 4)
     true_physics = SEIRMModel(target_idx=4)
-
-    # Feltevés: Szintén SEIRM, célváltozó ugyanaz
     assumed_physics = SEIRMModel(target_idx=4)
 
-    # Megnövelt kapacitás, hogy a Feature modul biztosan képes legyen a komoly tanulásra
+    # FIGYELEM: d_x = 5 lett az új 4 exogén változó + 1 zajos esetszám miatt!
     model_cfg = EINNModelConfig(
-        d_x=2,
-        d_e=32,  # 32 dimenziós beágyazási tér
+        d_x=5,
+        d_e=32,
         d_s=5,
         d_p=4,
-        feature_n_layers=2  # 2 rejtett réteg az Encoder-Decoderben
+        feature_n_layers=2
     )
 
-    # Baseline súlyok: Mivel a feltelezett modell tökéletes, minden fizikai és aux
-    # veszteség bátran kaphat 1.0-s súlyt, nincsenek egymásnak ellentmondó gradiensek.
     train_cfg = EINNTrainConfig(
-        device='cuda',
-        learning_rate=0.005,
+        device='cpu',
+        learning_rate=1e-3,
         epochs_per_phase=1000,
-        early_stopping_patience=30,
+        early_stopping_patience=40,
         early_stopping_min_delta=1e-5,
         reps={
-            'phase_1': 1,
-            'phase_2': 1,
-            'phase_3': 1,
-            'phase_4': 1
+            'phase_1': 2, 'phase_2': 1, 'phase_3': 2, 'phase_4': 1
         },
         loss_weights={
-            'data_T': 1.0, 'data_F': 1.0,
-            'ode_T': 1.0, 'ode_F': 1.0,
-            'ode_future_T': 1.0, 'ode_future_F': 1.0,
-            'kd_target': 1.0, 'kd_emb': 0.5,
-            'mono': 1.0, 'param': 0.001,
-            'aux': 0.5  # Mivel a PreCalibrator is SEIRM-et használt, ez a mankó most tökéletes!
+            'data_T': 10.0, 'data_F': 10.0,
+            'ode_T': 0.1, 'ode_F': 0.1,
+            'ode_future_T': 0.01, 'ode_future_F': 0.01,
+            'kd_target': 1.0, 'kd_emb': 1.0,
+            'mono': 2.0, 'param': 0.1,
+            'aux': 10.0
         }
     )
 
     runner = EINNRunner(
-        output_dir="./experiment_results/baseline_seirm_run",
+        output_dir="./experiment_results/baseline_seirm_rich_data",
         model_config=model_cfg,
         train_config=train_cfg
     )
 
     runner.run_experiment(
         true_model=true_physics,
-        true_initial_states=[0.99, 0.01, 0.0, 0.0, 0.0],  # S, E, I, R, M
-        true_params=[0.4, 0.2, 0.1, 0.05],  # beta, alpha, gamma, mu
+        true_initial_states=[0.99, 0.01, 0.0, 0.0, 0.0],
+        true_params=[0.4, 0.2, 0.1, 0.05],
         assumed_model=assumed_physics,
         assumed_d_p=4,
-        seq_len=200,  # Elegendő hossz a járvány felfutásához és lecsengéséhez
-        window_size=14,  # Két hetes ablakok
-        epochs=80,  # Adunk neki 80 makró-epochot a tökéletes finomhangoláshoz
+        seq_len=300,  # Hosszabb idősor, hogy kifusson a járvány (300 nap)
+        window_size=14,
+        epochs=80,
         batch_size=16
     )
