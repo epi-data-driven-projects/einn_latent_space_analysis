@@ -66,64 +66,50 @@ class TrainingPostProcessor:
 
         print(f"Tanítási metrikák JSON formátumban elmentve ide: {filepath}")
 
-    def plot_loss_curves(self, metrics: List[TrainingMetrics], filename: str = "loss_curves.png") -> None:
-        """
-        Veszteséggörbék (Loss curves) rajzolása és mentése. 
-        Kizárólag a 4. fázis (a makro-epoch végső összevont tanulása) metrikáit használja 
-        az áttekinthető logaritmikus ábrázoláshoz.
-
-        :param List[TrainingMetrics] metrics: A tréner által gyűjtött metrikák listája.
-        :param str filename: A kimeneti ábra fájlneve.
-        """
+    def plot_loss_curves(self, metrics: list[TrainingMetrics], filename: str = "loss_curves.png"):
+        """Plots the macro-epoch loss curves based on the collected metrics."""
         if not metrics:
-            print("Nincsenek metrikák a kirajzoláshoz.")
             return
 
-        # Szűrés a 4. fázis végi állapotokra (ahol már minden veszteségkomponens aktív)
-        phase4_metrics = [m for m in metrics if m.phase == 4]
+        import matplotlib.pyplot as plt
 
-        # Hibatűrés: ha valamiért nem futott le a 4. fázis, az epochok utolsó rögzített metrikáját vesszük
+        # Phase 4 metrikák kigyűjtése az epochok végén
+        phase4_metrics = [m for m in metrics if m.phase == 4]
         if not phase4_metrics:
-            epochs = sorted(list(set(m.epoch for m in metrics)))
-            phase4_metrics = [[m for m in metrics if m.epoch == ep][-1] for ep in epochs]
+            return
 
         epochs = [m.epoch for m in phase4_metrics]
-        total_losses = [m.total_loss for m in phase4_metrics]
+        total_loss = [m.total_loss for m in phase4_metrics]
 
-        # Specifikus (rész)veszteségek kinyerése, ha léteznek a szótárban
-        data_t_losses = [m.loss_components.get('data_T', None) for m in phase4_metrics]
-        ode_t_losses = [m.loss_components.get('ode_T', None) for m in phase4_metrics]
-        data_f_losses = [m.loss_components.get('data_F', None) for m in phase4_metrics]
+        # Biztonságos kigyűjtés (ha egy loss komponens hiányzik, 0-t teszünk be)
+        data_t_loss = [m.loss_components.get('data_T', 0.0) for m in phase4_metrics]
+        data_f_loss = [m.loss_components.get('data_F', 0.0) for m in phase4_metrics]
+        ode_t_loss = [m.loss_components.get('ode_T', 0.0) for m in phase4_metrics]
+        aux_loss = [m.loss_components.get('aux', 0.0) for m in phase4_metrics]
+        mono_loss = [m.loss_components.get('mono', 0.0) for m in phase4_metrics]
 
-        plt.figure(figsize=(12, 7))
+        plt.figure(figsize=(14, 8))
+        plt.plot(epochs, total_loss, label='Total Loss (Phase 4)', color='black', linewidth=2.5)
+        plt.plot(epochs, data_t_loss, label='Data Loss (Time)', color='blue', linestyle='--', alpha=0.7)
+        plt.plot(epochs, data_f_loss, label='Data Loss (Feature)', color='cyan', linestyle='--', alpha=0.7)
+        plt.plot(epochs, ode_t_loss, label='ODE Physics Loss (Time)', color='red', linestyle=':', alpha=0.7)
 
-        # Összesített veszteség (vastag fekete vonal)
-        plt.plot(epochs, total_losses, label='Total Loss (Phase 4)', color='black', linewidth=2.5)
+        # Új görbék hozzáadása
+        plt.plot(epochs, aux_loss, label='Auxiliary (Mankó) Loss', color='green', linestyle='-', alpha=0.6)
+        plt.plot(epochs, mono_loss, label='Monotonicity Loss', color='purple', linestyle='-.', alpha=0.6)
 
-        # Adat illeszkedési veszteségek (Time és Feature modul)
-        if all(val is not None for val in data_t_losses):
-            plt.plot(epochs, data_t_losses, label='Data Loss (Time)', linestyle='--', color='blue', alpha=0.7)
-        if all(val is not None for val in data_f_losses):
-            plt.plot(epochs, data_f_losses, label='Data Loss (Feature)', linestyle='--', color='cyan', alpha=0.7)
-
-        # Fizikai (ODE) veszteség
-        if all(val is not None for val in ode_t_losses):
-            plt.plot(epochs, ode_t_losses, label='ODE Physics Loss (Time)', linestyle=':', color='red', alpha=0.7)
-
-        plt.title('EINN Tanítási Veszteséggörbék Kialakulása')
+        plt.yscale('log')
         plt.xlabel('Makro-Epoch')
         plt.ylabel('Veszteség (Loss Value) - Log Skála')
-        plt.yscale('log')  # Kiemelten fontos a log skála a PINN/EINN hálózatok széles értéktartománya miatt
+        plt.title('EINN Tanítási Veszteséggörbék Kialakulása')
         plt.grid(True, which="both", ls="--", alpha=0.3)
         plt.legend(loc='upper right')
-        plt.tight_layout()
 
+        plt.tight_layout()
         filepath = os.path.join(self.output_dir, filename)
         plt.savefig(filepath, dpi=300)
         plt.close()
-
-        print(f"Veszteséggörbék grafikonja elmentve ide: {filepath}")
-
+        print(f"Bővített veszteséggörbe ábra elmentve ide: {filepath}")
     def plot_true_vs_predicted(self, true_states: np.ndarray, predicted_states: np.ndarray,
                                filename: str = "true_vs_predicted.png") -> None:
         """

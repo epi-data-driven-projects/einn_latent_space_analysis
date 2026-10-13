@@ -13,6 +13,7 @@ from einn.model.interface.einn_models import EINNModels
 from einn.model.interface.training_metrics import TrainingMetrics
 from einn.ode.base_ode_model import BaseODEModel
 from einn.ode.sir_model import SIRModel
+from einn.ode.seirm_model import SEIRMModel
 from einn.inference.training_post_processor import TrainingPostProcessor
 from einn.training.einn_trainer import EINNTrainer
 
@@ -65,10 +66,20 @@ class EINNRunner:
         self.logger.info(f"Adatok generálva. x_raw forma: {x_raw.shape}, y_raw forma: {y_raw.shape}")
 
         self.logger.info("=== 2. FÁZIS: ODE Előkalibráció (Kutatói feltevés illesztése) ===")
-        calibrator = ODEPreCalibrator(assumed_ode_model=assumed_model, d_p=assumed_d_p, device=self.train_config.device)
-        aux_raw = calibrator.calibrate(y_raw=y_raw, epochs=600, lr=0.01)
-        self.logger.info(f"Előkalibráció kész. aux_raw forma: {aux_raw.shape}")
 
+        calibrator = ODEPreCalibrator(assumed_ode_model=assumed_model, d_p=assumed_d_p, device=self.train_config.device)
+
+        # Mivel SEIRM modellt (5 rekesz) feltételezünk, egy 5 elemű kezdőállapotot adunk be mankónak!
+        # Tudjuk, hogy 99% fogékony és 1% fertőzött van az elején.
+        assumed_initial_states = [0.99, 0.01, 0.0, 0.0, 0.0] if assumed_model.d_s == 5 else [0.99, 0.01, 0.0]
+
+        aux_raw = calibrator.calibrate(
+            y_raw=y_raw,
+            initial_states=assumed_initial_states,  # <--- ÚJ PARAMÉTER!
+            epochs=500,
+            lr=0.01
+        )
+        self.logger.info(f"Előkalibráció kész. aux_raw forma: {aux_raw.shape}")
         self.logger.info("=== 3. FÁZIS: Adatok Normalizálása (Z-score Skálázás) ===")
         preprocessor = DataPreprocessor()
         batch_dict = preprocessor.fit_transform(
@@ -125,16 +136,14 @@ class EINNRunner:
         post_processor.save_metrics(metrics=metrics)
         post_processor.plot_loss_curves(metrics=metrics, filename="loss_curves.png")
 
+        # ---- Ezt a 7. Fázist kell visszatenni! ----
         self.logger.info("=== 7. FÁZIS: Predikció és Valóság Összehasonlítása ===")
         from einn.inference.inference_engine import InferenceEngine
-
         engine = InferenceEngine(models)
 
-        # A Batch dimenzió hozzáadása a teljes idősorhoz [1, Seq_len, Features]
         full_x = batch_dict["x"].unsqueeze(0).to(self.train_config.device)
         full_t = batch_dict["t"].unsqueeze(0).to(self.train_config.device)
 
-        # Predikció lekérése a Feature Modulon keresztül (Az InferenceEngine visszaskálázza a valós térbe)
         predicted_states = engine.predict_future(
             historical_x=full_x,
             historical_x_mask=None,
@@ -148,71 +157,69 @@ class EINNRunner:
         true_np = data_dict["true_latent_states"]
 
         post_processor.plot_true_vs_predicted(true_states=true_np, predicted_states=pred_np)
+        # ---------------------------------------------
 
         self.logger.info(f"Kísérlet befejezve! Eredmények a(z) {self.output_dir} mappában.")
         return models, metrics, preprocessor
 
 
 # ==========================================
-# SANITY CHECK: Működik-e egyáltalán a hálózat?
+# SANITY CHECK 2: SEIRM valóság vs. SEIRM feltevés
 # ==========================================
 if __name__ == "__main__":
-    # 1. A legkönnyebb adat: SIR modell (3 rekesz, 2 paraméter)
-    true_physics = SIRModel(target_idx=1)
+    # 1. VALÓSÁG: SEIRM modell. A célváltozó a Mortalitás (M), indexe: 4
+    true_physics = SEIRMModel(target_idx=4)
 
-    # Nincs strukturális hiba: a hálózat is SIR modellt feltételez!
-    assumed_physics = SIRModel(target_idx=1)
+    # 2. FELTEVÉS: SEIRM modell. Célváltozó ugyanaz.
+    assumed_physics = SEIRMModel(target_idx=4)
 
     model_cfg = EINNModelConfig(
         d_x=5,
         d_e=32,
-        d_s=3,  # SIR miatt 3 rekesz!
-        d_p=2,  # SIR miatt 2 paraméter!
+        d_s=5,
+        d_p=4,
         feature_n_layers=2
     )
 
     train_cfg = EINNTrainConfig(
         device='cpu',
-        learning_rate=0.002,  # Visszavettük az ugrálások megszüntetésére
-        epochs_per_phase=500,
+        learning_rate=0.002,
+        epochs_per_phase=300,
         early_stopping_patience=40,
         reps={
             'phase_1': 1, 'phase_2': 1, 'phase_3': 1, 'phase_4': 1
         },
         loss_weights={
-            # Az adat és az offline kalibráció adja az alapot
-            'data_T': 1.0, 'data_F': 1.0,
-            'aux': 1.0,
+            # A Célváltozó (M) és a Mankó (S, E, I, R) tartja a helyén a görbéket!
+            'data_T': 5.0, 'data_F': 5.0,
+            'aux': 5.0,  # VISSZAÁLLÍTVA! Ez kényszeríti ki a haranggörbéket!
 
-            # A FIZIKA VISSZAKAPCSOLÁSA (Kisebb súllyal)
-            # Ez fogja "letörni" az S-t és "felemelni" az R-t az I hatására!
-            'ode_T': 0.1, 'ode_F': 0.1,
+            # A fizika finomhangolja, hogy a deriváltak matematikailag is stimmeljenek
+            'ode_T': 1.0, 'ode_F': 1.0,
+            'ode_future_T': 0.1, 'ode_future_F': 0.1,
 
-            # Jövőbeli ODE egyelőre maradjon nagyon pici
-            'ode_future_T': 0.01, 'ode_future_F': 0.01,
-
-            # Monotonitás bekapcsolása (S csak csökkenhet, R csak nőhet)
-            'mono': 0.5,
-            'param': 0.01,
+            # Szigorú monotonitás (S csak lefelé, R és M csak felfelé mehet)
+            'mono': 2.0,
+            'param': 0.1,
 
             'kd_target': 1.0, 'kd_emb': 1.0,
         }
     )
 
     runner = EINNRunner(
-        output_dir="./experiment_results/sanity_check_sir",
+        output_dir="./experiment_results/sanity_check_seirm",
         model_config=model_cfg,
         train_config=train_cfg
     )
 
     runner.run_experiment(
         true_model=true_physics,
-        true_initial_states=[0.99, 0.01, 0.0],  # S, I, R
-        true_params=[0.3, 0.1],
+        true_initial_states=[0.99, 0.01, 0.0, 0.0, 0.0],  # SEIRM kezdőállapotok
+        true_params=[0.4, 0.2, 0.1, 0.05],  # SEIRM paraméterek
         assumed_model=assumed_physics,
-        assumed_d_p=2,
+        assumed_d_p=4,
         seq_len=200,
-        window_size=200,
+        window_size=200,  # A Sanity Check-hez (hogy lássuk a nagy képet) használjunk teljes ablakot!
         epochs=100,
         batch_size=1
     )
