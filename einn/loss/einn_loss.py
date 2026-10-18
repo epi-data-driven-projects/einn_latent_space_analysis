@@ -37,6 +37,7 @@ class EINNLoss(nn.Module):
             return torch.tensor(data=0.0, dtype=torch.float32, device=states.device)
 
         # Helyes indexelés: kivágjuk a Célváltozó (pl. 'I') egyetlen oszlopát
+        #idx = self.ode_model.target_idx
         idx = self.ode_model.target_idx
 
         return F.mse_loss(input=states[:, :, idx:idx + 1], target=targets)
@@ -130,6 +131,36 @@ class EINNLoss(nn.Module):
 
         return F.mse_loss(input=prediction, target=target)
 
+    @staticmethod
+    def calc_ic_loss(states: torch.Tensor, t: torch.Tensor, initial_states: list[float]) -> torch.Tensor:
+        """
+        Bünteti a hálózatot, ha a t=0 (a szekvencia legelső) időpillanatában
+        a predikció eltér az ismert, valós kezdeti állapotoktól.
+        """
+        # 1. Biztonsági ellenőrzés
+        if states.numel() == 0 or t.numel() == 0 or not initial_states:
+            return torch.tensor(0.0, dtype=torch.float32, device=states.device)
+
+        # 2. Megkeressük azokat az indexeket a batch-ben, ahol az idő majdnem 0
+        # Mivel a t normalizálva van (0 és 1 között), a 0. nap a 0.0 érték.
+        # Használunk egy apró epszilont (1e-5) a lebegőpontos pontatlanságok miatt.
+        mask_t0 = (t < 1e-3).squeeze(-1)
+
+        # Ha ebben a batch-ben nincs benne a 0. nap (mert mondjuk a 40-54. napot nézzük), nincs büntetés
+        if not mask_t0.any():
+            return torch.tensor(0.0, dtype=torch.float32, device=states.device)
+
+        # 3. Kigyűjtjük a hálózat predikcióit a 0. napokra
+        states_at_t0 = states[mask_t0]
+
+        # 4. Létrehozzuk a cél tenzort a megadott listából
+        target_ic = torch.tensor(initial_states, dtype=torch.float32, device=states.device)
+        # Kiterjesztjük a dimenziót, hogy passzoljon a states_at_t0 alakjához (batch size)
+        target_ic = target_ic.unsqueeze(0).expand(states_at_t0.shape[0], -1)
+
+        # 5. Kiszámoljuk az MSE (Mean Squared Error) hibát
+        return torch.nn.functional.mse_loss(states_at_t0, target_ic)
+
     def forward(self, phase_context: PhaseContext,
                 network_outputs: NetworkOutputs) -> tuple[torch.Tensor, dict[str, float]]:
         """
@@ -167,6 +198,14 @@ class EINNLoss(nn.Module):
                          ds_dt=network_outputs.ds_dt_T_ode,
                          inc_indices=self.mono_inc_indices,
                          dec_indices=self.mono_dec_indices))
+            # Was not in the original implementation of EINN
+            add_loss(component_name='ic',
+                     loss_tensor=self.calc_ic_loss(
+                         states=network_outputs.s_t,
+                         t=phase_context.t,
+                         initial_states=self.config.initial_states
+                     )
+                     )
 
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:

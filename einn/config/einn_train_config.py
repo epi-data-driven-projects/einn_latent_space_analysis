@@ -18,6 +18,8 @@ class EINNTrainConfig:
     :param str device: target device for tensors
     :param Dict[str, float] loss_weights: dictionary containing weights for various loss components
     """
+    initial_states: list
+
     learning_rate: float = 0.001
     epochs_per_phase: int = 1000
     future_steps: int = 30
@@ -46,9 +48,11 @@ class EINNTrainConfig:
         'mono': 1.0,
         'param': 0.001,
         'kd_target': 1.0,
-        'kd_emb': 5.0
+        'kd_emb': 5.0,
+        'ic': 10.0
     })
 
     aux_mean: float = 0.0
     aux_std: float = 1.0
     t_max: float = 1.0
+

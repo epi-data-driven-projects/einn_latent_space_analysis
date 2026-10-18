@@ -86,7 +86,7 @@ class TrainingPostProcessor:
         data_f_loss = [m.loss_components.get('data_F', 0.0) for m in phase4_metrics]
         ode_t_loss = [m.loss_components.get('ode_T', 0.0) for m in phase4_metrics]
         aux_loss = [m.loss_components.get('aux', 0.0) for m in phase4_metrics]
-        mono_loss = [m.loss_components.get('mono', 0.0) for m in phase4_metrics]
+        ic_loss = [m.loss_components.get('ic', 0.0) for m in phase4_metrics]
 
         plt.figure(figsize=(14, 8))
         plt.plot(epochs, total_loss, label='Total Loss (Phase 4)', color='black', linewidth=2.5)
@@ -96,7 +96,7 @@ class TrainingPostProcessor:
 
         # Új görbék hozzáadása
         plt.plot(epochs, aux_loss, label='Auxiliary (Mankó) Loss', color='green', linestyle='-', alpha=0.6)
-        plt.plot(epochs, mono_loss, label='Monotonicity Loss', color='purple', linestyle='-.', alpha=0.6)
+        plt.plot(epochs, ic_loss, label='IC Loss', color='purple', linestyle='-.', alpha=0.6)
 
         plt.yscale('log')
         plt.xlabel('Makro-Epoch')
@@ -110,34 +110,54 @@ class TrainingPostProcessor:
         plt.savefig(filepath, dpi=300)
         plt.close()
         print(f"Bővített veszteséggörbe ábra elmentve ide: {filepath}")
+
     def plot_true_vs_predicted(self, true_states: np.ndarray, predicted_states: np.ndarray,
                                filename: str = "true_vs_predicted.png") -> None:
         """
-        Kirajzolja az igazi (szimulált) rekeszeket és a modell által becsült rekeszeket.
+        Kirajzolja az igazi és a becsült rekeszeket, intelligensen kezelve a
+        strukturális eltéréseket (pl. 3 dimenziós SIR valóság vs. 5 dimenziós SEIRM predikció).
         """
-        if not true_states.shape == predicted_states.shape:
-            print(f"Hiba a rajzolásnál: eltérő dimenziók! True: {true_states.shape}, Pred: {predicted_states.shape}")
-            return
+        import matplotlib.pyplot as plt
+        import os
 
-        d_s = true_states.shape[1]
-        fig, axes = plt.subplots(nrows=d_s, ncols=1, figsize=(10, 2.5 * d_s), sharex=True)
+        d_s_true = true_states.shape[1]
+        d_s_pred = predicted_states.shape[1]
 
-        # Címkék SIR (3) vagy SEIRM (5) esetére
-        labels = ['Susceptible (S)', 'Exposed (E)', 'Infected (I)', 'Recovered (R)', 'Mortality (M)'] if d_s == 5 else [
-            'Susceptible (S)', 'Infected (I)', 'Recovered (R)']
+        # A nagyobb (prediktált) dimenzióhoz igazítjuk a sorok számát
+        fig, axes = plt.subplots(nrows=d_s_pred, ncols=1, figsize=(10, 2.5 * d_s_pred), sharex=True)
 
-        for i in range(d_s):
-            ax = axes[i] if d_s > 1 else axes
-            # Valóság (Fekete)
-            ax.plot(true_states[:, i], label=f'True {labels[i]}', color='black', linewidth=2)
-            # Predikció (Piros, szaggatott)
-            ax.plot(predicted_states[:, i], label=f'Predicted {labels[i]}', color='red', linestyle='--', linewidth=2)
+        pred_labels = ['Susceptible (S)', 'Exposed (E)', 'Infected (I)', 'Recovered (R)',
+                       'Mortality (M)'] if d_s_pred == 5 else ['Susceptible (S)', 'Infected (I)', 'Recovered (R)']
+
+        # Térkép a rekeszek összekötéséhez: Melyik SEIRM rekesznek mi a SIR párja?
+        # SIR: 0=S, 1=I, 2=R. SEIRM: 0=S, 1=E, 2=I, 3=R, 4=M
+        if d_s_true == 3 and d_s_pred == 5:
+            mapping_pred_to_true = {0: 0, 2: 1, 3: 2}  # S->S, I->I, R->R (Az E és M rekeszeknek nincs valós párja)
+        else:
+            mapping_pred_to_true = {i: i for i in range(min(d_s_true, d_s_pred))}
+
+        for i in range(d_s_pred):
+            ax = axes[i] if d_s_pred > 1 else axes
+
+            # 1. Valós (Ground Truth) adat kirajzolása, ha van hozzá tartozó rekesz
+            if i in mapping_pred_to_true:
+                true_idx = mapping_pred_to_true[i]
+                ax.plot(true_states[:, true_idx], label='True (Valóság)', color='black', linewidth=2)
+            else:
+                # Ha strukturális eltérés miatt nincs valós adat (pl. E vagy M a SIR modellben)
+                ax.plot([], [], ' ', label="Nincs valós adat (Strukturális eltérés)")
+
+            # 2. Predikció kirajzolása
+            ax.plot(predicted_states[:, i], label=f'Predicted {pred_labels[i]}', color='red', linestyle='--',
+                    linewidth=2)
+
             ax.set_ylabel('Populáció aránya')
+            ax.set_title(pred_labels[i], loc='left', fontsize=10)
             ax.grid(True, linestyle=':', alpha=0.6)
             ax.legend(loc='upper right')
 
         plt.xlabel('Napok (Időlépések)')
-        plt.suptitle('Valós (Ground Truth) vs. Becsült (Predicted) Látens Állapotok', fontsize=14)
+        plt.suptitle('Strukturális Modellhiba (SME) Vizsgálat: Valóság vs. Predikció', fontsize=14)
         plt.tight_layout()
 
         filepath = os.path.join(self.output_dir, filename)
