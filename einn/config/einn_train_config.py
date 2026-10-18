@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, List
 
 import torch
 
@@ -46,9 +46,13 @@ class EINNTrainConfig:
         'mono': 1.0,
         'param': 0.001,
         'kd_target': 1.0,
-        'kd_emb': 5.0
+        'kd_emb': 5.0,
+        'ic': 10.0,
+        'ic_F':10.0
     })
 
     aux_mean: float = 0.0
     aux_std: float = 1.0
     t_max: float = 1.0
+
+    initial_states: List[float] = field(default_factory=list)

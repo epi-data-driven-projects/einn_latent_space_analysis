@@ -86,7 +86,7 @@ class TrainingPostProcessor:
         data_f_loss = [m.loss_components.get('data_F', 0.0) for m in phase4_metrics]
         ode_t_loss = [m.loss_components.get('ode_T', 0.0) for m in phase4_metrics]
         aux_loss = [m.loss_components.get('aux', 0.0) for m in phase4_metrics]
-        mono_loss = [m.loss_components.get('mono', 0.0) for m in phase4_metrics]
+        ic_loss = [m.loss_components.get('ic', 0.0) for m in phase4_metrics]
 
         plt.figure(figsize=(14, 8))
         plt.plot(epochs, total_loss, label='Total Loss (Phase 4)', color='black', linewidth=2.5)
@@ -96,7 +96,7 @@ class TrainingPostProcessor:
 
         # Új görbék hozzáadása
         plt.plot(epochs, aux_loss, label='Auxiliary (Mankó) Loss', color='green', linestyle='-', alpha=0.6)
-        plt.plot(epochs, mono_loss, label='Monotonicity Loss', color='purple', linestyle='-.', alpha=0.6)
+        plt.plot(epochs, ic_loss, label='IC Loss', color='purple', linestyle='-.', alpha=0.6)
 
         plt.yscale('log')
         plt.xlabel('Makro-Epoch')

@@ -92,6 +92,10 @@ class EINNRunner:
         self.train_config.aux_mean = preprocessor.aux_mean
         self.train_config.aux_std = preprocessor.aux_std
         self.train_config.t_max = preprocessor.t_max
+        import torch
+        ic_physical = torch.tensor(assumed_initial_states, dtype=torch.float32, device=preprocessor.aux_mean.device)
+        ic_normalized = (ic_physical - preprocessor.aux_mean) / (preprocessor.aux_std + 1e-8)
+        self.train_config.initial_states = ic_normalized.cpu().tolist()        
 
         dataset = EINNDataset(
             x=batch_dict["x"],
@@ -182,7 +186,7 @@ if __name__ == "__main__":
     )
 
     train_cfg = EINNTrainConfig(
-        device='cpu',
+        device='cuda:1',
         learning_rate=0.002,
         epochs_per_phase=300,
         early_stopping_patience=40,
@@ -195,14 +199,15 @@ if __name__ == "__main__":
             'aux': 5.0,  # VISSZAÁLLÍTVA! Ez kényszeríti ki a haranggörbéket!
 
             # A fizika finomhangolja, hogy a deriváltak matematikailag is stimmeljenek
-            'ode_T': 1.0, 'ode_F': 1.0,
-            'ode_future_T': 0.1, 'ode_future_F': 0.1,
+            'ode_T': 5.0, 'ode_F': 5.0,
+            'ode_future_T': 1.0, 'ode_future_F': 1.0,
 
             # Szigorú monotonitás (S csak lefelé, R és M csak felfelé mehet)
             'mono': 2.0,
             'param': 0.1,
 
             'kd_target': 1.0, 'kd_emb': 1.0,
+            'ic': 2.0, 'ic_F': 0.0
         }
     )
 
@@ -220,6 +225,6 @@ if __name__ == "__main__":
         assumed_d_p=4,
         seq_len=200,
         window_size=200,  # A Sanity Check-hez (hogy lássuk a nagy képet) használjunk teljes ablakot!
-        epochs=100,
+        epochs=400,
         batch_size=1
     )

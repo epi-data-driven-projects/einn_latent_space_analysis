@@ -129,6 +129,16 @@ class EINNLoss(nn.Module):
             return torch.tensor(data=0.0, dtype=torch.float32, device=prediction.device)
 
         return F.mse_loss(input=prediction, target=target)
+    
+    @staticmethod
+    def calc_ic_loss(states: torch.Tensor, t: torch.Tensor, initial_states: list[float]) -> torch.Tensor:
+        if states.numel() == 0 or t.numel() == 0 or not initial_states: return torch.tensor(0.0, device=states.device)
+        mask_t0 = (t < 1e-3).squeeze(-1)
+        if not mask_t0.any(): return torch.tensor(0.0, device=states.device)
+        states_at_t0 = states[mask_t0]
+        target_ic = torch.tensor(initial_states, dtype=torch.float32, device=states.device).unsqueeze(0).expand(states_at_t0.shape[0], -1)
+        return F.mse_loss(states_at_t0, target_ic)
+
 
     def forward(self, phase_context: PhaseContext,
                 network_outputs: NetworkOutputs) -> tuple[torch.Tensor, dict[str, float]]:
@@ -167,7 +177,8 @@ class EINNLoss(nn.Module):
                          ds_dt=network_outputs.ds_dt_T_ode,
                          inc_indices=self.mono_inc_indices,
                          dec_indices=self.mono_dec_indices))
-
+            add_loss('ic', self.calc_ic_loss(network_outputs.s_t, phase_context.t, self.config.initial_states))
+        
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:
             add_loss(component_name='ode_T',
@@ -195,7 +206,8 @@ class EINNLoss(nn.Module):
                      loss_tensor=self.calc_knowledge_distillation_loss(
                          target=network_outputs.e_t.detach(),
                          prediction=network_outputs.e_t_F))
-
+            add_loss('ic_F', self.calc_ic_loss(network_outputs.s_t_F, phase_context.t, self.config.initial_states))
+    
         # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
             add_loss(component_name='ode_F',
