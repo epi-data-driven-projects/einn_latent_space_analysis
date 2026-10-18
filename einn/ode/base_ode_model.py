@@ -10,12 +10,13 @@ class BaseODEModel(nn.Module, ABC):
     """
     Abstract base class for all epidemiological ODE models.
     """
-    def __init__(self):
+    def __init__(self, d_s: int, target_idx: int = -1):
         """
         Initializes the BaseODEModel.
         """
         super().__init__()
-
+        self.d_s = d_s
+        self.target_idx = target_idx if target_idx != -1 else d_s - 1
         self.raw_params = None
 
         # Dictionary storing compartment indices for monotonicity constraints. Keys represent the required
