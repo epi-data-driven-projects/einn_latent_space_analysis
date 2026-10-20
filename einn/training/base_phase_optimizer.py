@@ -91,6 +91,13 @@ class BasePhaseOptimizer(ABC):
         # Backward pass
         total_loss.backward()
 
+        # Gradiens Vágás (Gradient Clipping)
+        # Megakadályozza, hogy az ODE hiba miatt a súlyok a végtelenbe (NaN) robbanjanak.
+        torch.nn.utils.clip_grad_norm_(self.models.time_module.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.models.feature_module.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.models.output_module.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.models.ode_model.parameters(), max_norm=1.0)
+
         # Update weights
         self.optimizer.step()
 

@@ -24,3 +24,4 @@ class PhaseContext:
     t: torch.Tensor
     aux_targets: torch.Tensor
     models: EINNModels
+    mask: torch.Tensor | None = None

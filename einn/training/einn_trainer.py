@@ -136,7 +136,8 @@ class EINNTrainer:
                     y=batch_data['y'],
                     t=batch_data['t'],
                     aux_targets=batch_data['aux_targets'],
-                    models=self.models
+                    models=self.models,
+                    mask=batch_data.get('mask', None)  # TODO: erről nem kellene megfeledkezni
                 )
 
                 # Execute the full forward-backward pipeline and retrieve the scalar total loss

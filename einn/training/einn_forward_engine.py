@@ -132,7 +132,7 @@ class EINNForwardEngine:
         if context.phase_num >= 3:
             # Feature module requires x, t, and mask
             # It inherently decodes the entire sequence (past + future) provided in t_grad
-            e_t_f_full = models.feature_module(x=x_input, t=t_scaled.detach(), mask=None)
+            e_t_f_full = models.feature_module(x=x_input, t=t_scaled.detach(), mask=context.mask)
             
             # TÖKÉLETES LECSATOLÁS: Magát a változót írjuk felül, 
             # így az out.e_t_F is garantáltan gradiensmentes lesz!
