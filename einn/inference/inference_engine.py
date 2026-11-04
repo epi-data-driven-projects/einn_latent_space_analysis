@@ -26,7 +26,9 @@ class InferenceEngine:
             historical_x_mask: torch.Tensor,
             future_t: torch.Tensor,
             z_mean: torch.Tensor | None = None,
-            z_std: torch.Tensor | None = None
+            z_std: torch.Tensor | None = None,
+            t_min: float | None = None,
+            t_max: float | None = None
     ) -> torch.Tensor:
         """
         Generates future predictions based on a window of historical data and future time steps.
@@ -39,10 +41,14 @@ class InferenceEngine:
         :param torch.Tensor | None z_std: The standard deviation used during Z-score normalization.
         :return torch.Tensor: The predicted future compartment states in the original scale.
                               Shape: [Batch, future_steps, d_s].
+        :param float t_min: minimum of time
+        :param float t_max: maximum of time
         """
         self._set_eval_mode()
 
         with torch.no_grad():
+            if t_max is not None and t_min is not None:
+                future_t = (future_t - t_min) / (t_max - (t_min + 1e-8))
             # Feature Module obtains the embedding
             embedding = self.models.feature_module(
                 x=historical_x,
