@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, List
 
 import torch
 
@@ -17,6 +17,11 @@ class EINNTrainConfig:
     :param bool early_stopping_percentage: whether to use percentage for delta
     :param str device: target device for tensors
     :param Dict[str, float] loss_weights: dictionary containing weights for various loss components
+    :param  float aux_mean: mean of the auxiliary data
+    :param  float aux_std: standard deviation of the auxiliary data
+    :param float t_min: minimum of the time vector
+    :param float t_max: maximum of the time vector
+    :param List[float] initial_states: list of initial states
     """
     learning_rate: float = 0.001
     epochs_per_phase: int = 1000
@@ -33,7 +38,7 @@ class EINNTrainConfig:
     early_stopping_patience: int = 10
     early_stopping_percentage: bool = False
 
-    device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device: str = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
     loss_weights: Dict[str, float] = field(default_factory=lambda: {
         'data_T': 1.0,
@@ -46,5 +51,7 @@ class EINNTrainConfig:
         'mono': 1.0,
         'param': 0.001,
         'kd_target': 1.0,
-        'kd_emb': 5.0
+        'kd_emb': 5.0,
+        'ic': 10.0,
+        'ic_F': 10.0
     })
