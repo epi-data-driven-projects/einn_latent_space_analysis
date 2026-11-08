@@ -22,12 +22,12 @@ class SIRModel(BaseODEModel):
 
         self.monotonicity_indices = {
             "decreasing": [0],  # Susceptible
-            "increasing": [2]  # Recovered
+            "increasing": [2]   # Recovered
         }
 
     def init_params(self, param_dict: dict):
         """
-        Initializes the raw parameters for beta and gamma using inverse tanh scaling.
+        Initializes the raw learnable parameters for beta and gamma using inverse tanh scaling.
 
         :param dict param_dict: Dictionary containing initial biological values for the parameters.
         """
@@ -36,7 +36,6 @@ class SIRModel(BaseODEModel):
 
         self.raw_params = nn.Parameter(data=torch.tensor(data=[beta_raw, gamma_raw], dtype=torch.float32))
 
-    # TODO: ezt majd normálissá kell varázsolni
     def forward(self, states: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         """
         Pure mathematical implementation of the SIR differential equations.
@@ -47,23 +46,23 @@ class SIRModel(BaseODEModel):
         :param torch.Tensor params: The current physical parameters [beta, gamma]. Shape: [Batch, Seq_len, 2] or [2].
         :return torch.Tensor: The computed time derivatives of the states. Shape: [Batch, Seq_len, 3].
         """
-
         # Using ellipsis [..., 0:1] ensures dimensional broadcasting works safely whether params
         # is a 1D tensor (static global parameter) or a 3D tensor (dynamic parameter series).
         beta = params[..., 0:1]
         gamma = params[..., 1:2]
-        # Unpacks the states tensor along the last dimension
+
+        # Unpacks the states tensor along the last dimension into individual compartments
         s, i_state, r = torch.split(tensor=states, split_size_or_sections=1, dim=-1)
 
         # Standard epidemiological infection term normalized by the total population (N).
         infection_term = (beta * s * i_state) / self.population_n
 
-        # System of differential equations
+        # System of differential equations for the SIR model
         ds_dt_val = -infection_term
         di_dt_val = infection_term - (gamma * i_state)
         dr_dt_val = gamma * i_state
 
-        # Concatenating back into the appropriate format
+        # Concatenating back into the appropriate [Batch, Seq_len, 3] format
         return torch.cat(tensors=(ds_dt_val, di_dt_val, dr_dt_val), dim=-1)
 
     def get_derivatives(self, states: torch.Tensor, detach_params: bool) -> ODESolution:
@@ -76,7 +75,6 @@ class SIRModel(BaseODEModel):
         """
         params = self.get_scaled_params(detach=detach_params)
 
-        # A kód ismétlése helyett egyszerűen meghívjuk a forward metódust!
         ds_dt_tensor = self.forward(states=states, params=params)
 
         return ODESolution(
