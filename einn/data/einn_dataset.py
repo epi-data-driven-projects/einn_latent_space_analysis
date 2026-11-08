@@ -74,16 +74,16 @@ class EINNDataset(Dataset):
         """
         return self.seq_len - self.window_size + 1
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
+    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
         """
         Retrieves the windowed slice of data starting at the given index.
 
-        :param int idx: The starting index of the window.
+        :param int index: The starting index of the window.
         :return Dict[str, torch.Tensor]: A dictionary containing the sliced tensors for X, y, t, and aux_targets.
          Shape for each tensor will be [Window_size, Features].
         """
-        start_idx = idx
-        end_idx = idx + self.window_size
+        start_idx = index
+        end_idx = index + self.window_size
 
         return {
             'X': self.x[start_idx:end_idx],

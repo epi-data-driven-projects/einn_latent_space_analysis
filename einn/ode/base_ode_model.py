@@ -8,14 +8,21 @@ from einn.model.interface.ode_solution import ODESolution
 
 class BaseODEModel(nn.Module, ABC):
     """
-    Abstract base class for all epidemiological ODE models.
+    Abstract base class for all epidemiological ODE models in the EINN framework.
+    It provides common interfaces for parameter initialization, mathematical
+    forward passes, and safe physical parameter scaling.
     """
-    def __init__(self):
+    def __init__(self, d_s: int, target_idx):
         """
         Initializes the BaseODEModel.
+
+        :param int d_s: The number of distinct ODE compartment states (e.g., 3 for SIR, 5 for SEIRM).
+        :param int target_idx: The index of the compartment that corresponds
+         to the observed target data (e.g., Infected).
         """
         super().__init__()
-
+        self.d_s = d_s
+        self.target_idx = target_idx
         self.raw_params = None
 
         # Dictionary storing compartment indices for monotonicity constraints. Keys represent the required

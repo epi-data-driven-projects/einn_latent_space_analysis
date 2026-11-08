@@ -4,6 +4,7 @@ from typing import List
 from torch.utils.data import DataLoader
 
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.data.einn_dataset import EINNDataset
 from einn.loss.einn_loss import EINNLoss
 from einn.model.interface.einn_models import EINNModels
@@ -24,19 +25,20 @@ class EINNTrainer:
     Manages the phase optimizers, dataloaders, and coordinates the sequential training epochs.
     """
 
-    def __init__(self, models: EINNModels, config: EINNTrainConfig):
+    def __init__(self, models: EINNModels, config: EINNTrainConfig, scaling_stats: DataScalingStats):
         """
         Initializes the trainer, the forward engine, the loss calculator, and all 4 independent phase optimizers.
 
         :param EINNModels models: The container holding all initialized neural networks and the ODE model.
         :param EINNTrainConfig config: The training configuration object containing hyperparameters.
+        :param DataScalingStats scaling_stats: Container containing runtime scaling statistics and initial states.
         """
         self.models = models
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        self.engine = EINNForwardEngine(train_config=config)
-        self.loss_calculator = EINNLoss(config=config, ode_model=models.ode_model)
+        self.engine = EINNForwardEngine(train_config=config, scaling_stats=scaling_stats)
+        self.loss_calculator = EINNLoss(config=config, ode_model=models.ode_model, scaling_stats=scaling_stats)
 
         # Initialize the 4 separate Phase Optimizers, preserving their independent Adam states
         self.opt_phase1 = Phase1Optimizer(models=models, config=config, engine=self.engine,
@@ -93,8 +95,8 @@ class EINNTrainer:
             all_metrics.extend(phase4_metrics)
 
             # Determine which loss to monitor for Early Stopping
-            if len(phase4_metrics) > 0 and 'data_f' in phase4_metrics[-1].loss_components:
-                monitored_loss = phase4_metrics[-1].loss_components['data_f']
+            if len(phase4_metrics) > 0 and 'data_F' in phase4_metrics[-1].loss_components:
+                monitored_loss = phase4_metrics[-1].loss_components['data_F']
             elif len(all_metrics) > 0:
                 monitored_loss = all_metrics[-1].total_loss
             else:
@@ -136,7 +138,8 @@ class EINNTrainer:
                     y=batch_data['y'],
                     t=batch_data['t'],
                     aux_targets=batch_data['aux_targets'],
-                    models=self.models
+                    models=self.models,
+                    mask=batch_data.get('mask', None)
                 )
 
                 # Execute the full forward-backward pipeline and retrieve the scalar total loss

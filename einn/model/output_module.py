@@ -10,7 +10,7 @@ class OutputModule(BaseNeuralNetwork):
     into physical ODE compartment states (e.g., S, E, I, R, M).
     """
 
-    def __init__(self, d_e: int = 20, d_s: int = 5) -> None:
+    def __init__(self, d_e: int = 20, d_s: int = 5):
         """
         Initializes the Output Module.
 
