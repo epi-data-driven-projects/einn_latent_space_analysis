@@ -1,5 +1,6 @@
 import torch
 
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.interface.einn_models import EINNModels
 
 
@@ -25,30 +26,27 @@ class InferenceEngine:
             historical_x: torch.Tensor,
             historical_x_mask: torch.Tensor,
             future_t: torch.Tensor,
-            z_mean: torch.Tensor | None = None,
-            z_std: torch.Tensor | None = None,
-            t_min: float | None = None,
-            t_max: float | None = None
+            scaling_stats: DataScalingStats
     ) -> torch.Tensor:
         """
         Generates future predictions based on a window of historical data and future time steps.
         Uses the Feature Module to extract embeddings, and the Output Module to map them to states.
 
         :param torch.Tensor historical_x: The historical exogenous input features. Shape: [Batch, Seq_len, d_x].
-        :param torch.Tensor historical_x_mask: The mask for the historical input window.
-        :param torch.Tensor future_t: The normalized future time indices to predict for. Shape: [Batch, Future_steps, 1]
-        :param torch.Tensor | None z_mean: The mean used during Z-score normalization for inverse scaling.
-        :param torch.Tensor | None z_std: The standard deviation used during Z-score normalization.
-        :return torch.Tensor: The predicted future compartment states in the original scale.
-                              Shape: [Batch, future_steps, d_s].
-        :param float t_min: minimum of time
-        :param float t_max: maximum of time
+        :param torch.Tensor historical_x_mask: The mask for the historical input window. Shape: [Batch, Seq_len].
+        :param torch.Tensor future_t: The raw future time indices to predict for. Shape: [Batch, Future_steps, 1].
+        :param DataScalingStats scaling_stats: Container holding the runtime scaling statistics (mean, std, min, max).
+        :return torch.Tensor: The predicted future compartment states in the original physical scale. Shape: [Batch, Future_steps, d_s].
         """
         self._set_eval_mode()
 
         with torch.no_grad():
-            if t_max is not None and t_min is not None:
-                future_t = (future_t - t_min) / (t_max - (t_min + 1e-8))
+            # Extract temporal bounds and move them to the target device
+            t_min = scaling_stats.t_min.to(future_t.device)
+            t_max = scaling_stats.t_max.to(future_t.device)
+
+            # Applying min-max scaling
+            future_t = (future_t - t_min) / (t_max - (t_min + 1e-8))
             # Feature Module obtains the embedding
             embedding = self.models.feature_module(
                 x=historical_x,
@@ -60,12 +58,11 @@ class InferenceEngine:
             states_prime = self.models.output_module(e=embedding)
 
             # Z-score inverse scaling
-            if z_mean is not None and z_std is not None:
-                z_mean_t = z_mean.to(states_prime.device)
-                z_std_t = z_std.to(states_prime.device)
-                states_prime = (states_prime * z_std_t) + z_mean_t
+            z_mean_t = scaling_stats.aux_mean.to(states_prime.device)
+            z_std_t = scaling_stats.aux_std.to(states_prime.device)
+            states_prime = (states_prime * z_std_t) + z_mean_t
 
-            return states_prime
+        return states_prime
 
     def _set_eval_mode(self):
         """
