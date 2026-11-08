@@ -1,6 +1,5 @@
-import pytest
-
 import numpy as np
+import pytest
 import torch
 
 from einn.data.ode_solution_generator import ODESolutionGenerator
@@ -77,7 +76,8 @@ def test_initial_state_anchoring(seirm_generator: ODESolutionGenerator):
     t0_states = calibrated_curves[0].tolist()
 
     assert np.allclose(t0_states, locked_initial_states, atol=1e-5), \
-        f"Initial state anchoring failed. Expected {locked_initial_states}, but the trajectory started at {t0_states}."
+        f"Initial state anchoring failed. Expected {locked_initial_states}," +\
+        f"but the trajectory started at {t0_states}."
 
 
 def test_lbfgs_convergence_accuracy(sir_generator: ODESolutionGenerator):
@@ -126,7 +126,8 @@ def test_lbfgs_convergence_accuracy(sir_generator: ODESolutionGenerator):
     mse_error = np.mean((y_raw_array - predicted_y) ** 2)
 
     assert mse_error < 1e-4, \
-        f"L-BFGS optimization failed to converge. MSE Error was {mse_error:.6f}, which is above the 1e-4 tolerance."
+        f"L-BFGS optimization failed to converge." +\
+        f"MSE Error was {mse_error:.6f}, which is above the 1e-4 tolerance."
 
 
 def test_invalid_initial_guess_length(sir_generator: ODESolutionGenerator):

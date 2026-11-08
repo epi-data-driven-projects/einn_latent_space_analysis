@@ -130,10 +130,12 @@ def test_feature_correlation_statistical_accuracy(sir_generator: SyntheticDataGe
     # Assert that the achieved correlation is within a reasonable statistical tolerance
     # (+/- 0.15) of the requested parameter due to the added extra_noise and base signal shapes.
     assert np.isclose(actual_rho_mobility, target_correlations['mobility'], atol=0.15), \
-        f"Mobility correlation {actual_rho_mobility:.2f} drifted too far from target {target_correlations['mobility']}."
+        f"Mobility correlation {actual_rho_mobility:.2f}" +\
+        f"drifted too far from target {target_correlations['mobility']}."
 
     assert np.isclose(actual_rho_stringency, target_correlations['stringency'], atol=0.15), \
-        f"Stringency correlation {actual_rho_stringency:.2f} drifted too far from target {target_correlations['stringency']}."
+        f"Stringency correlation {actual_rho_stringency:.2f}" +\
+        f"drifted too far from target {target_correlations['stringency']}."
 
 
 def test_generator_initial_state_validation(sir_generator: SyntheticDataGenerator):
@@ -148,4 +150,5 @@ def test_generator_initial_state_validation(sir_generator: SyntheticDataGenerato
     valid_params = [0.3, 0.1]
 
     with pytest.raises(ValueError, match="Initial states length"):
-        sir_generator.generate(initial_states=invalid_initial_states, true_params=valid_params)
+        sir_generator.generate(initial_states=invalid_initial_states,
+                               true_params=valid_params)
