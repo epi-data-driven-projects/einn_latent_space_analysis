@@ -23,21 +23,13 @@ class BasePhaseOptimizer(ABC):
             engine: EINNForwardEngine,
             loss_calculator: EINNLoss
     ):
-        """
-        Initializes the base phase optimizer.
-
-        :param EINNModels models: The container holding all initialized neural networks and the ODE model.
-        :param EINNTrainConfig config: The training configuration containing hyperparameters (e.g., learning rates).
-        :param EINNForwardEngine engine: The core engine responsible for executing the forward pass and computing derivatives.
-        :param EINNLoss loss_calculator: The module responsible for calculating the composite physics and data losses.
-        """
         self.models = models
         self.config = config
         self.engine = engine
         self.loss_calculator = loss_calculator
 
-        # A child class MUST initialize this specific Adam optimizer in _init_optimizer()
-        self.optimizer: torch.optim.Optimizer = None
+        # A child class should initialize this variable
+        self.optimizer: torch.optim.Optimizer | None = None
         self._init_optimizer()
 
     @abstractmethod
@@ -73,21 +65,6 @@ class BasePhaseOptimizer(ABC):
         """
         pass
 
-    def apply_grad_clip(self):
-        """
-        Applies gradient clipping to all network parameters globally.
-
-        PINNs heavily rely on computing derivatives of the network
-        outputs with respect to time (ds/dt). Early in training, when the network's predictions severely
-        violate the strict ODE physics, the resulting loss gradients can become large. Clipping the L2 norm of
-        the gradients to a maximum of 1.0 ensures numerical stability and prevents the optimizer
-        from taking catastrophic steps.
-        """
-        torch.nn.utils.clip_grad_norm_(self.models.time_module.parameters(), max_norm=1.0)
-        torch.nn.utils.clip_grad_norm_(self.models.feature_module.parameters(), max_norm=1.0)
-        torch.nn.utils.clip_grad_norm_(self.models.output_module.parameters(), max_norm=1.0)
-        torch.nn.utils.clip_grad_norm_(self.models.ode_model.parameters(), max_norm=1.0)
-
     def step(self, context: PhaseContext) -> tuple[float, dict[str, float]]:
         """
         Executes a full optimization iteration: Forward -> Loss -> Backward -> Step.
@@ -113,9 +90,6 @@ class BasePhaseOptimizer(ABC):
 
         # Backward pass
         total_loss.backward()
-
-        # Safeguard against exploding gradients
-        self.apply_grad_clip()
 
         # Update weights
         self.optimizer.step()
