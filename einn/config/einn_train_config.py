@@ -9,7 +9,6 @@ class EINNTrainConfig:
     """
     Configuration data class for the EINN training process and loss calculations.
     :param float learning_rate: learning rate for optimizers
-    :param int epochs_per_phase: number of training epochs per phase
     :param int future_steps: number of steps for future prediction
     :param Dict[str, int] reps: number of repetitions of one specific training phase
     :param float early_stopping_min_delta: minimum delta for early stopping
@@ -17,21 +16,16 @@ class EINNTrainConfig:
     :param bool early_stopping_percentage: whether to use percentage for delta
     :param str device: target device for tensors
     :param Dict[str, float] loss_weights: dictionary containing weights for various loss components
-    :param  float aux_mean: mean of the auxiliary data
-    :param  float aux_std: standard deviation of the auxiliary data
-    :param float t_min: minimum of the time vector
-    :param float t_max: maximum of the time vector
     :param List[float] initial_states: list of initial states
     """
     learning_rate: float = 0.001
-    epochs_per_phase: int = 1000
     future_steps: int = 30
 
     reps: Dict[str, int] = field(default_factory=lambda: {
-        'phase_1': 1,
-        'phase_2': 1,
-        'phase_3': 1,
-        'phase_4': 1,
+        'phase_1': 300,
+        'phase_2': 300,
+        'phase_3': 300,
+        'phase_4': 300,
     })
 
     early_stopping_min_delta: float = 0.0
