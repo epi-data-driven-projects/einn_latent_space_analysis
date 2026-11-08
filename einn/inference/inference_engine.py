@@ -1,5 +1,6 @@
 import torch
 
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.interface.einn_models import EINNModels
 
 
@@ -25,20 +26,18 @@ class InferenceEngine:
             historical_x: torch.Tensor,
             historical_x_mask: torch.Tensor,
             future_t: torch.Tensor,
-            z_mean: torch.Tensor | None = None,
-            z_std: torch.Tensor | None = None
+            scaling_stats: DataScalingStats
     ) -> torch.Tensor:
         """
         Generates future predictions based on a window of historical data and future time steps.
         Uses the Feature Module to extract embeddings, and the Output Module to map them to states.
 
         :param torch.Tensor historical_x: The historical exogenous input features. Shape: [Batch, Seq_len, d_x].
-        :param torch.Tensor historical_x_mask: The mask for the historical input window.
-        :param torch.Tensor future_t: The normalized future time indices to predict for. Shape: [Batch, Future_steps, 1]
-        :param torch.Tensor | None z_mean: The mean used during Z-score normalization for inverse scaling.
-        :param torch.Tensor | None z_std: The standard deviation used during Z-score normalization.
-        :return torch.Tensor: The predicted future compartment states in the original scale.
-                              Shape: [Batch, future_steps, d_s].
+        :param torch.Tensor historical_x_mask: The mask for the historical input window. Shape: [Batch, Seq_len].
+        :param torch.Tensor future_t: The raw future time indices to predict for. Shape: [Batch, Future_steps, 1].
+        :param DataScalingStats scaling_stats: Container holding the runtime scaling statistics (mean, std, min, max).
+        :return torch.Tensor: The predicted future compartment states in the original physical scale.
+                                      Shape: [Batch, Future_steps, d_s].
         """
         self._set_eval_mode()
 
