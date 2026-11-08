@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import List
+
 import torch
+
 
 @dataclass
 class DataScalingStats:
@@ -12,7 +14,7 @@ class DataScalingStats:
     :param torch.Tensor t_min: The minimum time value of the sequence, used for Min-Max scaling of the temporal domain.
     :param torch.Tensor t_max: The maximum time value of the sequence, used for Min-Max scaling of the temporal domain.
     :param List[float] initial_states: The normalized initial state values of the ODE compartments
-                                           (e.g., S, E, I, R, M) at t=0.
+                                       (e.g., S, E, I, R, M) at t=0.
     """
     aux_mean: torch.Tensor
     aux_std: torch.Tensor

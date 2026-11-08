@@ -37,11 +37,17 @@ class InferenceEngine:
         :param torch.Tensor future_t: The raw future time indices to predict for. Shape: [Batch, Future_steps, 1].
         :param DataScalingStats scaling_stats: Container holding the runtime scaling statistics (mean, std, min, max).
         :return torch.Tensor: The predicted future compartment states in the original physical scale.
-                                      Shape: [Batch, Future_steps, d_s].
+                              Shape: [Batch, Future_steps, d_s].
         """
         self._set_eval_mode()
 
         with torch.no_grad():
+            # Extract temporal bounds and move them to the target device
+            t_min = scaling_stats.t_min.to(future_t.device)
+            t_max = scaling_stats.t_max.to(future_t.device)
+
+            # Applying min-max scaling
+            future_t = (future_t - t_min) / (t_max - (t_min + 1e-8))
             # Feature Module obtains the embedding
             embedding = self.models.feature_module(
                 x=historical_x,
@@ -53,12 +59,11 @@ class InferenceEngine:
             states_prime = self.models.output_module(e=embedding)
 
             # Z-score inverse scaling
-            if z_mean is not None and z_std is not None:
-                z_mean_t = z_mean.to(states_prime.device)
-                z_std_t = z_std.to(states_prime.device)
-                states_prime = (states_prime * z_std_t) + z_mean_t
+            z_mean_t = scaling_stats.aux_mean.to(states_prime.device)
+            z_std_t = scaling_stats.aux_std.to(states_prime.device)
+            states_prime = (states_prime * z_std_t) + z_mean_t
 
-            return states_prime
+        return states_prime
 
     def _set_eval_mode(self):
         """
