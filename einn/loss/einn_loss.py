@@ -142,11 +142,13 @@ class EINNLoss(nn.Module):
     def calc_ic_loss(states: torch.Tensor, t: torch.Tensor, initial_states: list[float]) -> torch.Tensor:
         """
         Calculates the Initial Condition (IC) loss to enforce the physical starting state of the system at t=0.
-        This anchors the neural network's predictions at the beginning of the trajectory to the known biological baseline.
+        This anchors the neural network's predictions at the beginning of the trajectory to the known
+        biological baseline.
 
         :param torch.Tensor states: The predicted physical compartments over time. Shape: [Batch, Seq_len, d_s].
         :param torch.Tensor t: The time steps associated with the predictions. Shape: [Batch, Seq_len, 1].
-        :param list[float] initial_states: A list of the normalized ground truth initial compartment values. Length: d_s.
+        :param list[float] initial_states: A list of the normalized ground truth initial compartment values.
+                                           Length: d_s.
         :return torch.Tensor: The MSE loss between the predicted states at t = 0 and the true initial_states.
         """
         if states.numel() == 0 or t.numel() == 0 or not initial_states:
@@ -196,67 +198,94 @@ class EINNLoss(nn.Module):
 
         # Phase 1: Train Time Module (Solo Data, Aux & Monotonicity)
         if phase_context.phase_num >= 1:
-            add_loss(component_name='data_T',
-                     loss_tensor=self.calc_data_loss(
-                         states=network_outputs.s_t,
-                         targets=phase_context.y))
-            add_loss(component_name='aux',
-                     loss_tensor=self.calc_aux_loss(
-                         states=network_outputs.s_t,
-                         aux_targets=phase_context.aux_targets))
-            add_loss(component_name='mono',
-                     loss_tensor=self.calc_monotonicity_loss(
-                         ds_dt=network_outputs.ds_dt_T_ode,
-                         inc_indices=self.mono_inc_indices,
-                         dec_indices=self.mono_dec_indices))
-            add_loss(component_name='ic',
-                     loss_tensor=self.calc_ic_loss(
-                         states=network_outputs.s_t,
-                         t=phase_context.t,
-                         initial_states=self.scaling_stats.initial_states))
+            add_loss(
+                component_name='data_T',
+                loss_tensor=self.calc_data_loss(
+                    states=network_outputs.s_t,
+                    targets=phase_context.y)
+            )
+            add_loss(
+                component_name='aux',
+                loss_tensor=self.calc_aux_loss(
+                    states=network_outputs.s_t,
+                    aux_targets=phase_context.aux_targets)
+            )
+            add_loss(
+                component_name='mono',
+                loss_tensor=self.calc_monotonicity_loss(
+                    ds_dt=network_outputs.ds_dt_T_ode,
+                    inc_indices=self.mono_inc_indices,
+                    dec_indices=self.mono_dec_indices)
+            )
+            add_loss(
+                component_name='ic',
+                loss_tensor=self.calc_ic_loss(
+                    states=network_outputs.s_t,
+                    t=phase_context.t,
+                    initial_states=self.scaling_stats.initial_states)
+            )
 
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:
-            add_loss(component_name='ode_T',
-                     loss_tensor=self.calc_ode_loss(
-                         ds_dt_nn=network_outputs.ds_dt_T_nn,
-                         ds_dt_ode=network_outputs.ds_dt_T_ode))
-            add_loss(component_name='ode_future_T',
-                     loss_tensor=self.calc_ode_loss(
-                         ds_dt_nn=network_outputs.ds_dt_future_T_nn,
-                         ds_dt_ode=network_outputs.ds_dt_future_T_ode))
-            add_loss(component_name='param',
-                     loss_tensor=self.calc_parameter_smoothness_loss(
-                         params=network_outputs.params))
+            add_loss(
+                component_name='ode_T',
+                loss_tensor=self.calc_ode_loss(
+                    ds_dt_nn=network_outputs.ds_dt_T_nn,
+                    ds_dt_ode=network_outputs.ds_dt_T_ode)
+            )
+            add_loss(
+                component_name='ode_future_T',
+                loss_tensor=self.calc_ode_loss(
+                    ds_dt_nn=network_outputs.ds_dt_future_T_nn,
+                    ds_dt_ode=network_outputs.ds_dt_future_T_ode)
+            )
+            add_loss(
+                component_name='param',
+                loss_tensor=self.calc_parameter_smoothness_loss(
+                    params=network_outputs.params)
+            )
 
         # Phase 3: Add Feature Module (Data & Knowledge Distillation)
         if phase_context.phase_num >= 3:
-            add_loss(component_name='data_F',
-                     loss_tensor=self.calc_data_loss(
-                         states=network_outputs.s_t_F, targets=phase_context.y))
-            add_loss(component_name='kd_target',
-                     loss_tensor=self.calc_knowledge_distillation_loss(
-                         target=network_outputs.s_t.detach(),
-                         prediction=network_outputs.s_t_F))
-            add_loss(component_name='kd_emb',
-                     loss_tensor=self.calc_knowledge_distillation_loss(
-                         target=network_outputs.e_t.detach(),
-                         prediction=network_outputs.e_t_F))
-            add_loss(component_name='ic_F',
-                     loss_tensor=self.calc_ic_loss(
-                         states=network_outputs.s_t_F,
-                         t=phase_context.t,
-                         initial_states=self.scaling_stats.initial_states))
+            add_loss(
+                component_name='data_F',
+                loss_tensor=self.calc_data_loss(
+                    states=network_outputs.s_t_F,
+                    targets=phase_context.y)
+            )
+            add_loss(
+                component_name='kd_target',
+                loss_tensor=self.calc_knowledge_distillation_loss(
+                    target=network_outputs.s_t.detach(),
+                    prediction=network_outputs.s_t_F)
+            )
+            add_loss(
+                component_name='kd_emb',
+                loss_tensor=self.calc_knowledge_distillation_loss(
+                    target=network_outputs.e_t.detach(),
+                    prediction=network_outputs.e_t_F)
+            )
+            add_loss(
+                component_name='ic_F',
+                loss_tensor=self.calc_ic_loss(
+                    states=network_outputs.s_t_F,
+                    t=phase_context.t,
+                    initial_states=self.scaling_stats.initial_states)
+            )
 
         # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
-            add_loss(component_name='ode_F',
-                     loss_tensor=self.calc_ode_loss(
-                         ds_dt_nn=network_outputs.ds_dt_F_nn,
-                         ds_dt_ode=network_outputs.ds_dt_F_ode))
-            add_loss(component_name='ode_future_F',
-                     loss_tensor=self.calc_ode_loss(
-                         ds_dt_nn=network_outputs.ds_dt_future_F_nn,
-                         ds_dt_ode=network_outputs.ds_dt_future_F_ode))
+            add_loss(
+                component_name='ode_F',
+                loss_tensor=self.calc_ode_loss(
+                    ds_dt_nn=network_outputs.ds_dt_F_nn,
+                    ds_dt_ode=network_outputs.ds_dt_F_ode)
+            )
+            add_loss(
+                component_name='ode_future_F',
+                loss_tensor=self.calc_ode_loss(
+                    ds_dt_nn=network_outputs.ds_dt_future_F_nn,
+                    ds_dt_ode=network_outputs.ds_dt_future_F_ode)
+            )
 
         return total_loss, loss_dict

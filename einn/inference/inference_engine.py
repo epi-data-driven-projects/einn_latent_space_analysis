@@ -36,7 +36,8 @@ class InferenceEngine:
         :param torch.Tensor historical_x_mask: The mask for the historical input window. Shape: [Batch, Seq_len].
         :param torch.Tensor future_t: The raw future time indices to predict for. Shape: [Batch, Future_steps, 1].
         :param DataScalingStats scaling_stats: Container holding the runtime scaling statistics (mean, std, min, max).
-        :return torch.Tensor: The predicted future compartment states in the original physical scale. Shape: [Batch, Future_steps, d_s].
+        :return torch.Tensor: The predicted future compartment states in the original physical scale.
+                              Shape: [Batch, Future_steps, d_s].
         """
         self._set_eval_mode()
 

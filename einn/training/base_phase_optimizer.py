@@ -28,7 +28,8 @@ class BasePhaseOptimizer(ABC):
 
         :param EINNModels models: The container holding all initialized neural networks and the ODE model.
         :param EINNTrainConfig config: The training configuration containing hyperparameters (e.g., learning rates).
-        :param EINNForwardEngine engine: The core engine responsible for executing the forward pass and computing derivatives.
+        :param EINNForwardEngine engine: The core engine responsible for executing the forward pass and
+                                         computing derivatives.
         :param EINNLoss loss_calculator: The module responsible for calculating the composite physics and data losses.
         """
         self.models = models
