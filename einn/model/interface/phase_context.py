@@ -16,6 +16,7 @@ class PhaseContext:
     :param torch.Tensor t: tensor of time steps to evaluate
     :param torch.Tensor aux_targets: tensor of ideal trajectories for the initial auxiliary loss
     :param EINNModels models: container holding the initialized neural and ODE models
+    :param torch.Tensor mask: mask holding the current training phase mask
     """
     phase_num: int
     epoch: int
@@ -24,3 +25,4 @@ class PhaseContext:
     t: torch.Tensor
     aux_targets: torch.Tensor
     models: EINNModels
+    mask: torch.Tensor | None = None
