@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.loss.einn_loss import EINNLoss
 from einn.model.interface.network_outputs import NetworkOutputs
 from einn.model.interface.phase_context import PhaseContext
@@ -20,15 +21,34 @@ def base_train_config() -> EINNTrainConfig:
 
 
 @pytest.fixture
-def loss_calculator_seirm(base_train_config: EINNTrainConfig) -> EINNLoss:
+def scaling_stats() -> DataScalingStats:
+    """
+    Fixture providing a dummy DataScalingStats object for testing purposes.
+    Sets all scaling values to neutral/identity operations (mean=0, std=1)
+    and defines a mock initial state.
+
+    :return DataScalingStats: An initialized dummy scaling statistics container.
+    """
+    return DataScalingStats(
+        aux_mean=torch.zeros(5),
+        aux_std=torch.ones(5),
+        t_min=torch.tensor(0.0),
+        t_max=torch.tensor(1.0),
+        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0]
+    )
+
+
+@pytest.fixture
+def loss_calculator_seirm(base_train_config: EINNTrainConfig, scaling_stats: DataScalingStats) -> EINNLoss:
     """
     Fixture providing an initialized EINNLoss configured for the SEIRM model.
 
     :param EINNTrainConfig base_train_config: The base training configuration fixture.
+    :param DataScalingStats scaling_stats: The dummy scaling statistics fixture.
     :return EINNLoss: Initialized loss calculator using SEIRM monotonicity rules.
     """
     ode_model = SEIRMModel(population_n=1.0)
-    return EINNLoss(config=base_train_config, ode_model=ode_model)
+    return EINNLoss(config=base_train_config, ode_model=ode_model, scaling_stats=scaling_stats)
 
 
 def test_monotonicity_loss_penalties(loss_calculator_seirm: EINNLoss):
@@ -111,24 +131,27 @@ def test_forward_phase_routing(loss_calculator_seirm: EINNLoss):
     )
 
     loss, loss_dict = loss_calculator_seirm(phase_context=context, network_outputs=network_outputs)
-    assert isinstance(loss, torch.Tensor), "Forward pass must return a Tensor."
+
+    assert isinstance(loss, torch.Tensor), "Forward pass must return a scalar Tensor for backward()."
     assert not torch.isnan(input=loss), "Loss computation resulted in NaN."
 
 
-def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig):
+def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig, scaling_stats: DataScalingStats):
     """
     Advanced combined test: Verifies that loss weights are correctly applied and
     that the cascading phase logic perfectly accumulates the expected losses.
 
     :param EINNTrainConfig base_train_config: The training configuration fixture.
+    :param DataScalingStats scaling_stats: The dummy scaling statistics fixture.
     """
     base_train_config.loss_weights = {
         'data_T': 2.0, 'aux': 3.0, 'mono': 0.0, 'ode_T': 0.0, 'ode_future_T': 0.0,
-        'param': 0.0, 'data_F': 0.0, 'kd_target': 0.0, 'kd_emb': 0.0, 'ode_F': 0.0, 'ode_future_F': 0.0
+        'param': 0.0, 'data_F': 0.0, 'kd_target': 0.0, 'kd_emb': 0.0, 'ode_F': 0.0,
+        'ode_future_F': 0.0, 'ic': 0.0, 'ic_F': 0.0
     }
 
     ode_model = SIRModel()
-    loss_calculator = EINNLoss(config=base_train_config, ode_model=ode_model)
+    loss_calculator = EINNLoss(config=base_train_config, ode_model=ode_model, scaling_stats=scaling_stats)
 
     # MSE should be 1.0
     mock_targets = torch.zeros(size=(1, 5, 1))
@@ -144,28 +167,33 @@ def test_phase_routing_and_weight_integration(base_train_config: EINNTrainConfig
 
     context_phase1 = PhaseContext(
         phase_num=1, epoch=1, x=mock_targets, y=mock_targets,
-        t=torch.zeros(size=(1, 5, 1)), aux_targets=mock_targets, models=None
+        t=torch.ones(size=(1, 5, 1)), aux_targets=mock_targets, models=None
     )
 
-    # In Phase 1: data_T (2.0) + aux (3.0) -> Expected results: 5.0
+    # In Phase 1: data_T weight (2.0) * MSE (1.0) + aux weight (3.0) * MSE (1.0)
+    # Expected result: 2.0 + 3.0 = 5.0
     loss_phase1, _ = loss_calculator(phase_context=context_phase1, network_outputs=network_outputs)
+
     assert torch.allclose(input=loss_phase1, other=torch.tensor(data=5.0)), \
         "Phase 1 accumulated loss does not match the configured weights."
 
 
-def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig):
+def test_sir_vs_seirm_monotonicity_routing(base_train_config: EINNTrainConfig, scaling_stats: DataScalingStats):
     """
     Advanced architectural test: Ensures that SIR and SEIRM models apply
     monotonicity penalties to entirely different compartments based on their internal physics.
 
     :param EINNTrainConfig base_train_config: The training configuration fixture.
+    :param DataScalingStats scaling_stats: The dummy scaling statistics fixture.
     """
-    loss_sir = EINNLoss(config=base_train_config, ode_model=SIRModel())
-    loss_seirm = EINNLoss(config=base_train_config, ode_model=SEIRMModel(population_n=1.0))
+    loss_sir = EINNLoss(config=base_train_config, ode_model=SIRModel(), scaling_stats=scaling_stats)
+    loss_seirm = EINNLoss(config=base_train_config, ode_model=SEIRMModel(population_n=1.0), scaling_stats=scaling_stats)
 
-    # A derivative tensor where the value at index 2 is strongly negative (-5.0).
-    # In the SIR model, this is R (Recovered), so it must be penalized.
-    # In the SEIRM model, this is I (Infected), which can fluctuate, so it is NOT penalized.
+    # Create a mock derivative tensor where the value at index 2 is strongly negative (-5.0).
+    # In the SIR model, Index 2 represents R (Recovered). By biological definition,
+    # Recovered individuals can never decrease. This MUST be penalized.
+    # In the SEIRM model, Index 2 represents I (Infected). The number of infected can
+    # easily go up or down. This MUST NOT be penalized.
     mock_ds_dt = torch.tensor(data=[[[0.0, 0.0, -5.0, 0.0, 0.0]]], dtype=torch.float32)
 
     sir_penalty = loss_sir.calc_monotonicity_loss(
@@ -241,7 +269,7 @@ def test_knowledge_distillation_gradient_isolation(loss_calculator_seirm: EINNLo
             phase_num=3, epoch=1,
             x=torch.zeros(size=(1, 5, 5)),
             y=torch.zeros(size=(1, 5, 1)),
-            t=torch.zeros(size=(1, 5, 1)),
+            t=torch.ones(size=(1, 5, 1)),
             aux_targets=dummy_states,
             models=None
         )
@@ -289,18 +317,22 @@ def test_all_loss_components_aggregation(loss_calculator_seirm: EINNLoss):
 
     :param EINNLoss loss_calculator_seirm: The SEIRM loss calculator fixture.
     """
-    # 1. Minden kulcs csupa kisbetű, és bekerült mindkét (t és f) ode_future!
+    # Activate all 13 loss components with a weight of 1.0
     loss_calculator_seirm.weights = {
         'data_T': 1.0, 'aux': 1.0, 'mono': 1.0,
         'ode_T': 1.0, 'ode_future_T': 1.0, 'param': 1.0,
         'data_F': 1.0, 'kd_target': 1.0, 'kd_emb': 1.0,
-        'ode_F': 1.0, 'ode_future_F': 1.0
+        'ode_F': 1.0, 'ode_future_F': 1.0,
+        'ic': 1.0, 'ic_F': 1.0
     }
 
-    # Tensors for Data, Aux and Knowledge Distillation
-    # data_t: MSE(2.0, 1.0) = 1.0
+    # Set up the expected Initial Condition for the test
+    loss_calculator_seirm.scaling_stats.initial_states = [2.0, 2.0, 2.0, 2.0, 2.0]
+
+    # --- TENSORS FOR DATA, AUX & KD ---
+    # data_T: MSE(2.0, 1.0) = 1.0
     # aux: MSE(2.0, 1.0) = 1.0
-    # data_f: MSE(3.0, 1.0) = 4.0
+    # data_F: MSE(3.0, 1.0) = 4.0
     # kd_target: MSE(3.0, 2.0) = 1.0
     # kd_emb: MSE(4.0, 5.0) = 1.0
     s_t = torch.full(size=(1, 3, 5), fill_value=2.0)
@@ -311,11 +343,11 @@ def test_all_loss_components_aggregation(loss_calculator_seirm: EINNLoss):
     e_t = torch.full(size=(1, 3, 10), fill_value=5.0)
     e_t_f = torch.full(size=(1, 3, 10), fill_value=4.0)
 
-    # Tensors for ODE "physics" (Past & Future)
-    # ode_t: MSE(1.0, 2.0) = 1.0
-    # ode_future_t: MSE(1.0, 0.0) = 1.0
-    # ode_f: MSE(5.0, 3.0) = 4.0
-    # ode_future_f: MSE(3.0, 3.0) = 0.0
+    # --- TENSORS FOR ODE PHYSICS ---
+    # ode_T: MSE(1.0, 2.0) = 1.0
+    # ode_future_T: MSE(1.0, 0.0) = 1.0
+    # ode_F: MSE(5.0, 3.0) = 4.0
+    # ode_future_F: MSE(3.0, 3.0) = 0.0
     ds_dt_t_ode = torch.full(size=(1, 3, 5), fill_value=2.0)
     ds_dt_t_nn = torch.full(size=(1, 3, 5), fill_value=1.0)
 
@@ -328,21 +360,28 @@ def test_all_loss_components_aggregation(loss_calculator_seirm: EINNLoss):
     ds_dt_future_f_ode = torch.full(size=(1, 3, 5), fill_value=3.0)
     ds_dt_future_f_nn = torch.full(size=(1, 3, 5), fill_value=3.0)
 
-    # Monotonicity Loss
-    # SEIRM inc_indices [3, 4] MUST increase. 2.0 is > 0 -> Penalty: 0.0
-    # SEIRM dec_indices [0] MUST decrease. 2.0 is NOT < 0.
-    # Penalty calculation: (val * relu(val))^2 -> (2.0 * 2.0)^2 = 16.0
+    # --- MONOTONICITY LOSS ---
+    # SEIRM inc_indices [3, 4] MUST increase. Value is +2.0 (valid, no penalty).
+    # SEIRM dec_indices [0] MUST decrease. Value is +2.0 (invalid, triggers penalty).
+    # Penalty computation: (val * relu(val))^2 = (2.0 * 2.0)^2 = 16.0
     # mono = 16.0
 
-    # Parameter Smoothness Loss
-    # Sequence of 3 timesteps: 1.0 -> 2.0 -> 3.0.
-    # Squared differences are 1.0. Mean is 1.0.
+    # --- PARAMETER SMOOTHNESS LOSS ---
+    # Transitions across 3 time steps: 1.0 -> 2.0 -> 3.0
+    # Difference at each step is +1.0, squared is 1.0. Mean of squares is 1.0.
     # param = 1.0
     params = torch.tensor(data=[[
         [1.0, 1.0, 1.0, 1.0],
         [2.0, 2.0, 2.0, 2.0],
         [3.0, 3.0, 3.0, 3.0]
     ]], dtype=torch.float32)
+
+    # --- INITIAL CONDITION (IC) LOSS ---
+    # Using time steps t=[0.0, 1.0, 2.0]. Only the first step (t=0) triggers the IC loss.
+    # Time Module (s_t): Predicted at t=0 is 2.0. Target is 2.0. MSE = 0.0.
+    # Feature Module (s_t_F): Predicted at t=0 is 3.0. Target is 2.0. MSE = 1.0.
+    # ic = 0.0, ic_F = 1.0
+    t_tensor = torch.tensor([[[0.0], [1.0], [2.0]]], dtype=torch.float32)
 
     network_outputs = NetworkOutputs(
         s_t=s_t, e_t=e_t, s_t_F=s_t_f, e_t_F=e_t_f,
@@ -364,8 +403,12 @@ def test_all_loss_components_aggregation(loss_calculator_seirm: EINNLoss):
 
     total_loss, _ = loss_calculator_seirm(phase_context=phase_context, network_outputs=network_outputs)
 
-    # 15.0 (Standard Losses) + 16.0 (Monotonicity) = 31.0
-    expected_total = torch.tensor(data=31.0, dtype=torch.float32)
+    # Base Sum: 1.0 (data_T) + 1.0 (aux) + 4.0 (data_F) + 1.0 (kd_target) + 1.0 (kd_emb) = 8.0
+    # ODE Sum: 1.0 (ode_T) + 1.0 (ode_future_T) + 4.0 (ode_F) + 0.0 (ode_future_F) = 6.0
+    # Structural Sum: 16.0 (mono) + 1.0 (param) = 17.0
+    # IC Sum: 0.0 (ic) + 1.0 (ic_F) = 1.0
+    # TOTAL: 8.0 + 6.0 + 17.0 + 1.0 = 32.0
+    expected_total = torch.tensor(data=32.0, dtype=torch.float32)
 
     assert torch.allclose(input=total_loss, other=expected_total, atol=1e-5), \
         f"Aggregated loss was {total_loss.item()}, but expected {expected_total.item()}."
