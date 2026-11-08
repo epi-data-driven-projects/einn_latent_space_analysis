@@ -3,6 +3,7 @@ import torch
 
 from einn.config.einn_model_config import EINNModelConfig
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.loss.einn_loss import EINNLoss
 from einn.model.einn_builder import EINNBuilder
 from einn.model.interface.phase_context import PhaseContext
@@ -16,13 +17,22 @@ from einn.training.phase_optimizers.phase_4_optimizer import Phase4Optimizer
 @pytest.fixture
 def integrated_components() -> dict:
     """
-    Fixture providing all necessary components (Models, Engine, Loss, Configs, Context)
+    Fixture providing all necessary components (Models, Engine, Loss, Configs, Context, ScalingStats)
     to perform integration tests on the phase optimizers.
 
     :return dict: Dictionary holding all instantiated components required for testing.
     """
     model_config = EINNModelConfig(d_x=5, d_e=10, d_s=5, d_p=4, feature_n_layers=1)
     train_config = EINNTrainConfig(device='cpu')
+
+    # Dummy scaling stats required by Engine and Loss initialization
+    scaling_stats = DataScalingStats(
+        aux_mean=torch.zeros(5),
+        aux_std=torch.ones(5),
+        t_min=torch.tensor(0.0),
+        t_max=torch.tensor(1.0),
+        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0]
+    )
 
     # Build the neural networks and ODE models
     models = EINNBuilder.build_einn(
@@ -33,8 +43,8 @@ def integrated_components() -> dict:
         seed=42
     )
 
-    engine = EINNForwardEngine(train_config=train_config)
-    loss_calc = EINNLoss(config=train_config, ode_model=models.ode_model)
+    engine = EINNForwardEngine(train_config=train_config, scaling_stats=scaling_stats)
+    loss_calc = EINNLoss(config=train_config, ode_model=models.ode_model, scaling_stats=scaling_stats)
 
     # Mock Data for the PhaseContext
     t_full = torch.rand(size=(2, 10, 1))
@@ -277,11 +287,19 @@ def test_optimizer_full_integration_step(integrated_components: dict):
 def test_sequential_phase_optimizer_integration():
     """
     Chains all 4 phase optimizers sequentially and executes exactly 1 training
-     step (forward + backward + optimize) on each.
+    step (forward + backward + optimize) on each.
     """
     # Setup basic configurations and models
     model_config = EINNModelConfig(d_x=5, d_e=10, d_s=5, d_p=4, feature_n_layers=1)
     train_config = EINNTrainConfig(device='cpu', learning_rate=0.01)
+
+    scaling_stats = DataScalingStats(
+        aux_mean=torch.zeros(5),
+        aux_std=torch.ones(5),
+        t_min=torch.tensor(0.0),
+        t_max=torch.tensor(1.0),
+        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0]
+    )
 
     models = EINNBuilder.build_einn(
         model_config=model_config, train_config=train_config,
@@ -289,8 +307,8 @@ def test_sequential_phase_optimizer_integration():
         model_type="SEIRM", seed=42
     )
 
-    engine = EINNForwardEngine(train_config=train_config)
-    loss_calculator = EINNLoss(config=train_config, ode_model=models.ode_model)
+    engine = EINNForwardEngine(train_config=train_config, scaling_stats=scaling_stats)
+    loss_calculator = EINNLoss(config=train_config, ode_model=models.ode_model, scaling_stats=scaling_stats)
 
     # Instantiate all 4 optimizers (representing the trainer's internal state)
     opt1 = Phase1Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
