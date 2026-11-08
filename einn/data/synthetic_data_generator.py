@@ -113,14 +113,26 @@ class SyntheticDataGenerator:
         base_stringency = np.cumsum(np.random.normal(loc=0.0, scale=1.0, size=(self.seq_len, 1)), axis=0)
 
         # Mix the base signals with the normalized target trajectory based on requested rho values
-        mobility = self._create_correlated_feature(base_mobility, target_norm=y_norm,
-                                                   rho=correlations['mobility'])
-        temperature = self._create_correlated_feature(base_temp, target_norm=y_norm,
-                                                      rho=correlations['temperature'])
-        testing = self._create_correlated_feature(base_testing, target_norm=y_norm,
-                                                  rho=correlations['testing'])
-        stringency = self._create_correlated_feature(base_stringency, target_norm=y_norm,
-                                                     rho=correlations['stringency'])
+        mobility = self._create_correlated_feature(
+            semantic_base=base_mobility,
+            target_norm=y_norm,
+            rho=correlations['mobility']
+        )
+        temperature = self._create_correlated_feature(
+            semantic_base=base_temp,
+            target_norm=y_norm,
+            rho=correlations['temperature']
+        )
+        testing = self._create_correlated_feature(
+            semantic_base=base_testing,
+            target_norm=y_norm,
+            rho=correlations['testing']
+        )
+        stringency = self._create_correlated_feature(
+            semantic_base=base_stringency,
+            target_norm=y_norm,
+            rho=correlations['stringency']
+        )
 
         # Assemble the final observation matrix X.
         noisy_x = np.concatenate([mobility, temperature, testing, stringency, noisy_y], axis=1)

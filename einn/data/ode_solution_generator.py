@@ -25,6 +25,7 @@ class ODESolutionGenerator:
         self.model = assumed_ode_model
         self.d_p = d_p
         self.device = torch.device(device)
+
         self.target_idx = self.model.target_idx
         self.logger = logging.getLogger(__name__)
 
@@ -91,16 +92,16 @@ class ODESolutionGenerator:
                 # Apply sigmoid to constrain the unbounded logits back to valid physical rates [0, 1]
                 current_params = torch.sigmoid(params_logits)
 
-                simulated_states = []
+                simulated_states_ = []
 
                 # Forward Euler integration loop
                 for _ in range(seq_len):
-                    simulated_states.append(current_state)
+                    simulated_states_.append(current_state)
                     derivatives = self.model(states=current_state, params=current_params)
                     current_state = current_state + derivatives * 1.0
 
                 # Concatenate list of [1, d_s] tensors into [Seq_len, d_s]
-                simulated_states_tensor = torch.cat(simulated_states, dim=0)
+                simulated_states_tensor = torch.cat(simulated_states_, dim=0)
 
                 # Extract only the targeted compartment for loss calculation
                 simulated_y = simulated_states_tensor[:, self.target_idx:self.target_idx + 1]
