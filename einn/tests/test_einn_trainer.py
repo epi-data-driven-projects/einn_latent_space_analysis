@@ -3,6 +3,7 @@ import torch
 
 from einn.config.einn_model_config import EINNModelConfig
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.data.einn_dataset import EINNDataset
 from einn.model.einn_builder import EINNBuilder
 from einn.model.interface.training_metrics import TrainingMetrics
@@ -37,7 +38,25 @@ def einn_configs() -> dict:
 
 
 @pytest.fixture
-def integrated_trainer_setup(einn_configs: dict) -> dict:
+def scaling_stats() -> DataScalingStats:
+    """
+    Fixture providing a dummy DataScalingStats object for testing purposes.
+    Initializes neutral scaling parameters (mean=0, std=1, bounds=[0, 1])
+    to ensure math tests remain predictable.
+
+    :return DataScalingStats: An initialized dummy scaling statistics container.
+    """
+    return DataScalingStats(
+        aux_mean=torch.zeros(5),
+        aux_std=torch.ones(5),
+        t_min=torch.tensor(0.0),
+        t_max=torch.tensor(1.0),
+        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0]
+    )
+
+
+@pytest.fixture
+def integrated_trainer_setup(einn_configs: dict, scaling_stats: DataScalingStats) -> dict:
     """
     Fixture providing all initialized components needed to test the EINNTrainer, including a mock dataset.
     Uses the separated einn_configs fixture.
@@ -56,7 +75,7 @@ def integrated_trainer_setup(einn_configs: dict) -> dict:
         seed=42
     )
 
-    trainer = EINNTrainer(models=models, config=train_config)
+    trainer = EINNTrainer(models=models, config=train_config, scaling_stats=scaling_stats)
 
     seq_len = 15
     dummy_dataset = EINNDataset(
@@ -215,7 +234,7 @@ def test_trainer_early_stopping_integration(integrated_trainer_setup: dict):
     trainer.config.early_stopping_patience = 2
     trainer.config.early_stopping_percentage = False
 
-    # Ensure all phases run so Phase 4 generates the 'data_f' metric
+    # Ensure all phases run so Phase 4 generates the 'data_F' metric
     trainer.config.reps = {
         'phase_1': 1,
         'phase_2': 1,
