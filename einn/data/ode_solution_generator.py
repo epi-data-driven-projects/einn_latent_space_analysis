@@ -18,7 +18,7 @@ class ODESolutionGenerator:
         """
         Initializes the ODE solution generator.
 
-        :param BaseODEModel assumed_ode_model: The mathematical ODE model (e.g., SIR, SEIRM) used to generate the curves.
+        :param BaseODEModel assumed_ode_model: The mathematical ODE model (e.g., SIR, SEIRM) used to generate the curves
         :param int d_p: The number of physical parameters (e.g., 2 for SIR, 4 for SEIRM).
         :param str device: The computation device ('cpu' or 'cuda').
         """
