@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.interface.network_outputs import NetworkOutputs
 from einn.model.interface.phase_context import PhaseContext
 from einn.ode.base_ode_model import BaseODEModel
@@ -13,23 +14,24 @@ class EINNLoss(nn.Module):
     Computes the composite loss for the EINN architecture.
     """
 
-    def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel):
+    def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel, scaling_stats: DataScalingStats):
         """
         Initializes the EINNLoss module.
 
         :param EINNTrainConfig config: The configuration object containing loss weights.
         :param BaseODEModel ode_model: The epidemiological ODE model providing monotonicity rules.
+        :param DataScalingStats scaling_stats: The runtime scaling statistics, used to retrieve initial states.
         """
         super().__init__()
         self.config = config
         self.ode_model = ode_model
         self.weights = config.loss_weights
+        self.scaling_stats = scaling_stats
 
         self.mono_dec_indices = self.ode_model.monotonicity_indices["decreasing"]
         self.mono_inc_indices = self.ode_model.monotonicity_indices["increasing"]
 
-    @staticmethod
-    def calc_data_loss(states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def calc_data_loss(self, states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
         Calculates the Mean Squared Error (MSE) between predicted states and observed data.
         Assumes targets map to the first dim(targets) compartments (e.g., Infected).
@@ -41,8 +43,11 @@ class EINNLoss(nn.Module):
         if states.numel() == 0 or targets.numel() == 0:
             return torch.tensor(data=0.0, dtype=torch.float32, device=states.device)
 
-        target_dim = targets.shape[2]
-        return F.mse_loss(input=states[:, :, :target_dim], target=targets)
+        idx = self.ode_model.target_idx
+
+        # Slice the states tensor to extract only the target compartment's predictions.
+        # :idx:idx+1 ensures the slice retains its trailing dimension (e.g., [Batch, Seq_len, 1]).
+        return F.mse_loss(input=states[:, :, :idx:idx + 1], target=targets)
 
     @staticmethod
     def calc_aux_loss(states: torch.Tensor, aux_targets: torch.Tensor) -> torch.Tensor:
@@ -133,6 +138,40 @@ class EINNLoss(nn.Module):
 
         return F.mse_loss(input=prediction, target=target)
 
+    @staticmethod
+    def calc_ic_loss(states: torch.Tensor, t: torch.Tensor, initial_states: list[float]) -> torch.Tensor:
+        """
+        Calculates the Initial Condition (IC) loss to enforce the physical starting state of the system at t=0.
+        This anchors the neural network's predictions at the beginning of the trajectory to the known biological baseline.
+
+        :param torch.Tensor states: The predicted physical compartments over time. Shape: [Batch, Seq_len, d_s].
+        :param torch.Tensor t: The time steps associated with the predictions. Shape: [Batch, Seq_len, 1].
+        :param list[float] initial_states: A list of the normalized ground truth initial compartment values. Length: d_s.
+        :return torch.Tensor: The MSE loss between the predicted states at t = 0 and the true initial_states.
+        """
+        if states.numel() == 0 or t.numel() == 0 or not initial_states:
+            return torch.tensor(0.0, device=states.device)
+
+        # Create a boolean mask to isolate the exact time steps that represent t = 0
+        # Using a small tolerance (1e-3) is safer than strict equality for floating-point tensors
+        # Squeeze removes the trailing dimension of 't' for boolean indexing
+        mask_t0 = (t < 1e-3).squeeze(-1)
+
+        # If the batch does not contain t = 0 (e.g., in a sliding window far in the future), IC loss is zero
+        if not mask_t0.any():
+            return torch.tensor(0.0, device=states.device)
+
+        # Extract only the predicted state vectors that correspond to t = 0
+        states_at_t0 = states[mask_t0]
+
+        # Convert the list of ground truth initial states to a tensor.
+        # Expand it to match the batch dimension of 'states_at_t0' so they can be compared directly.
+        target_ic = torch.tensor(initial_states, dtype=torch.float32, device=states.device) \
+            .unsqueeze(0) \
+            .expand(states_at_t0.shape[0], -1)
+
+        return F.mse_loss(states_at_t0, target_ic)
+
     def forward(self, phase_context: PhaseContext,
                 network_outputs: NetworkOutputs) -> tuple[torch.Tensor, dict[str, float]]:
         """
@@ -170,6 +209,11 @@ class EINNLoss(nn.Module):
                          ds_dt=network_outputs.ds_dt_T_ode,
                          inc_indices=self.mono_inc_indices,
                          dec_indices=self.mono_dec_indices))
+            add_loss(component_name='ic',
+                     loss_tensor=self.calc_ic_loss(
+                         states=network_outputs.s_t,
+                         t=phase_context.t,
+                         initial_states=self.scaling_stats.initial_states))
 
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:
@@ -198,6 +242,11 @@ class EINNLoss(nn.Module):
                      loss_tensor=self.calc_knowledge_distillation_loss(
                          target=network_outputs.e_t.detach(),
                          prediction=network_outputs.e_t_F))
+            add_loss(component_name='ic_F',
+                     loss_tensor=self.calc_ic_loss(
+                         states=network_outputs.s_t_F,
+                         t=phase_context.t,
+                         initial_states=self.scaling_stats.initial_states))
 
         # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
