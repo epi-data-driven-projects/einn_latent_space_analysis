@@ -3,6 +3,7 @@ import torch
 
 from einn.config.einn_model_config import EINNModelConfig
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.einn_builder import EINNBuilder
 from einn.model.interface.einn_models import EINNModels
 from einn.model.interface.phase_context import PhaseContext
@@ -10,14 +11,34 @@ from einn.training.einn_forward_engine import EINNForwardEngine
 
 
 @pytest.fixture
-def engine() -> EINNForwardEngine:
+def scaling_stats() -> DataScalingStats:
+    """
+    Fixture providing a dummy DataScalingStats object for testing purposes.
+    Initializes neutral scaling parameters (mean=0, std=1, bounds=[0, 1])
+    to ensure math tests remain predictable.
+
+    :return DataScalingStats: An initialized dummy scaling statistics container.
+    """
+    return DataScalingStats(
+        aux_mean=torch.zeros(5),
+        aux_std=torch.ones(5),
+        t_min=torch.tensor(0.0),
+        t_max=torch.tensor(1.0),
+        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0]
+    )
+
+
+@pytest.fixture
+def engine(scaling_stats: DataScalingStats) -> EINNForwardEngine:
     """
     Fixture providing the EINNForwardEngine initialized with a base CPU configuration.
 
+    :param DataScalingStats scaling_stats: The dummy scaling statistics injected into the engine.
     :return EINNForwardEngine: An initialized instance of the forward engine.
     """
     config = EINNTrainConfig(device='cpu')
-    return EINNForwardEngine(train_config=config)
+    # BUGFIX: The engine now strictly requires scaling_stats to be passed during initialization.
+    return EINNForwardEngine(train_config=config, scaling_stats=scaling_stats)
 
 
 @pytest.fixture
