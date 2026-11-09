@@ -315,6 +315,7 @@ class EINNRunner:
         force_regenerate: bool = False,
         test_params: Optional[dict[str, float]] = None,
         test_correlations: Optional[dict[str, float]] = None,
+        test_noise_std: Optional[float] = None,
     ) -> EINNRunResult:
         """Run generation/cache -> scaling -> expanding windows -> train -> inference."""
         self.seed_everything(self.seed)
@@ -363,6 +364,7 @@ class EINNRunner:
         test_series = self.input_loader.generate_test_series(
             true_params=test_params,
             correlations=test_correlations,
+            noise_std=test_noise_std,
         )
         x_test_scaled = preprocessor.x_scaler.transform(test_series.x_raw).astype(np.float32)
         historical_x = torch.as_tensor(
