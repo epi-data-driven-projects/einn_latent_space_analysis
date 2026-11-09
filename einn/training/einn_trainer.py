@@ -1,6 +1,7 @@
 import logging
 from typing import List
 
+import torch
 from torch.utils.data import DataLoader
 
 from einn.config.einn_train_config import EINNTrainConfig
@@ -110,61 +111,75 @@ class EINNTrainer:
 
         return all_metrics
 
-    def _run_phase(self, phase_optimizer: BasePhaseOptimizer,
-                   phase_num: int, reps: int, epoch: int, dataloader: DataLoader) -> List[TrainingMetrics]:
-        """
-        Executes a specific optimization phase for a given number of repetitions over the entire dataset.
-
-        :param BasePhaseOptimizer phase_optimizer: The specific optimizer instance handling the current phase.
-        :param int phase_num: The numerical identifier of the current phase (1, 2, 3, or 4).
-        :param int reps: The number of times to iterate over the entire dataloader in this phase.
-        :param int epoch: The current macroscopic epoch number.
-        :param DataLoader dataloader: The PyTorch dataloader providing batched sequences.
-        :return List[TrainingMetrics]: Metrics recorded during this phase's execution.
-        """
+    def _run_phase(
+            self,
+            phase_optimizer: BasePhaseOptimizer,
+            phase_num: int,
+            reps: int,
+            epoch: int,
+            dataloader: DataLoader,
+    ) -> List[TrainingMetrics]:
         metrics_list = []
+        device = torch.device(self.config.device)
 
         for rep in range(1, reps + 1):
             total_epoch_loss = 0.0
-            epoch_loss_components = {}
+            epoch_loss_components: dict[str, float] = {}
             batches_count = 0
 
             for batch_data in dataloader:
-                # Construct the PhaseContext using the unpacked batch data
+                batch_data = {
+                    key: value.to(device) if torch.is_tensor(value) else value
+                    for key, value in batch_data.items()
+                }
+
+                history_steps_value = batch_data.get("history_steps")
+                if torch.is_tensor(history_steps_value):
+                    history_steps = int(history_steps_value.reshape(-1)[0].item())
+                elif history_steps_value is None:
+                    history_steps = None
+                else:
+                    history_steps = int(history_steps_value)
+
                 context = PhaseContext(
                     phase_num=phase_num,
                     epoch=epoch,
-                    x=batch_data['X'],
-                    y=batch_data['y'],
-                    t=batch_data['t'],
-                    aux_targets=batch_data['aux_targets'],
+                    x=batch_data["X"],
+                    y=batch_data["y"],
+                    t=batch_data["t"],
+                    aux_targets=batch_data["aux_targets"],
                     models=self.models,
-                    mask=batch_data.get('mask', None)
+                    mask=batch_data.get("mask"),
+                    target_mask=batch_data.get("target_mask"),
+                    history_steps=history_steps,
                 )
 
-                # Execute the full forward-backward pipeline and retrieve the scalar total loss
                 batch_loss, batch_loss_components = phase_optimizer.step(context=context)
-
                 total_epoch_loss += batch_loss
-
                 for key, value in batch_loss_components.items():
                     epoch_loss_components[key] = epoch_loss_components.get(key, 0.0) + value
-
                 batches_count += 1
 
-            # Average the loss across all batches processed
             avg_loss = total_epoch_loss / max(1, batches_count)
-            avg_components = {k: v / max(1, batches_count) for k, v in epoch_loss_components.items()}
-
+            avg_components = {
+                key: value / max(1, batches_count)
+                for key, value in epoch_loss_components.items()
+            }
             metrics = TrainingMetrics(
                 epoch=epoch,
                 phase=phase_num,
                 rep=rep,
                 total_loss=avg_loss,
-                loss_components=avg_components
+                loss_components=avg_components,
             )
             metrics_list.append(metrics)
-
-            print(f"Epoch: {epoch} | Phase: {phase_num} | Rep: {rep}/{reps} | Total Loss: {metrics.total_loss:.4e}")
+            self.logger.info(
+                "Epoch=%d Phase=%d Rep=%d/%d Loss=%.5e",
+                epoch,
+                phase_num,
+                rep,
+                reps,
+                avg_loss,
+            )
 
         return metrics_list

@@ -2,6 +2,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from einn.model.base_neural_network import BaseNeuralNetwork
 
@@ -56,36 +57,43 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
         )
 
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
-        """
-        Encodes the input sequence into a fixed-size context vector.
-        :param torch.Tensor x: Input sequence. Shape: [Batch, Seq_len, dim_seq_in].
-        :param torch.Tensor mask: Optional mask tensor. Shape: [Batch, Seq_len].
-        :return torch.Tensor: Context vector (h). Shape: [Batch, rnn_out].
-        """
-        # latent_seqs shape: [Batch, Seq_len, rnn_out]
-        latent_seqs, _ = self.enc_rnn(input=x)
+        """Encode a padded variable-length input and return one context vector.
 
+        The window generator uses prefix padding: valid observations come first,
+        followed by zero padding. The GRU is packed so the reverse direction does
+        not read padded positions. Padded query outputs are also excluded from the
+        attention pooling operation.
+        """
         if mask is not None:
-            # PyTorch's MultiheadAttention expects True for elements that should be ignored.
-            pytorch_mask = (mask == 0).bool()
+            lengths = mask.sum(dim=1).long().clamp(min=1).cpu()
+            packed_x = pack_padded_sequence(
+                x,
+                lengths=lengths,
+                batch_first=True,
+                enforce_sorted=False,
+            )
+            packed_output, _ = self.enc_rnn(packed_x)
+            latent_seqs, _ = pad_packed_sequence(
+                packed_output,
+                batch_first=True,
+                total_length=x.shape[1],
+            )
 
+            key_padding_mask = (mask == 0).bool()
             latent_seqs, _ = self.attn_layer(
                 query=latent_seqs,
                 key=latent_seqs,
                 value=latent_seqs,
-                key_padding_mask=pytorch_mask
+                key_padding_mask=key_padding_mask,
             )
+            latent_seqs = latent_seqs.masked_fill(key_padding_mask.unsqueeze(-1), 0.0)
         else:
+            latent_seqs, _ = self.enc_rnn(input=x)
             latent_seqs, _ = self.attn_layer(
                 query=latent_seqs,
                 key=latent_seqs,
-                value=latent_seqs
+                value=latent_seqs,
             )
 
-        # Aggregate over the time dimension (dim=1) to create a single context vector per batch
-        # Shape becomes: [Batch, rnn_out]
         latent_seqs = latent_seqs.sum(dim=1)
-
-        # Final projection
-        h = self.enc_out_layer(input=latent_seqs)
-        return h
+        return self.enc_out_layer(input=latent_seqs)

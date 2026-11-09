@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 import torch
 
 from einn.model.interface.einn_models import EINNModels
@@ -6,18 +7,8 @@ from einn.model.interface.einn_models import EINNModels
 
 @dataclass
 class PhaseContext:
-    """
-    Data class representing the current state of the training phase.
+    """Batch data and metadata used by one EINN optimization step."""
 
-    :param int phase_num: current optimization phase identifier (1, 2, 3, or 4)
-    :param int epoch: current training epoch number
-    :param torch.Tensor x: tensor of noisy input observations for the current batch
-    :param torch.Tensor y: tensor of target variables
-    :param torch.Tensor t: tensor of time steps to evaluate
-    :param torch.Tensor aux_targets: tensor of ideal trajectories for the initial auxiliary loss
-    :param EINNModels models: container holding the initialized neural and ODE models
-    :param torch.Tensor mask: mask holding the current training phase mask
-    """
     phase_num: int
     epoch: int
     x: torch.Tensor
@@ -25,4 +16,6 @@ class PhaseContext:
     t: torch.Tensor
     aux_targets: torch.Tensor
     models: EINNModels
-    mask: torch.Tensor | None = None
+    mask: torch.Tensor | None = None          # input mask: 1 = valid
+    target_mask: torch.Tensor | None = None   # target mask: 1 = observed
+    history_steps: int | None = None          # overlap length before forecast horizon

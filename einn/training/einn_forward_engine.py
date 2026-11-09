@@ -75,111 +75,100 @@ class EINNForwardEngine:
         return torch.cat(tensors=ds_dt_list, dim=-1)
 
     def forward(self, context: PhaseContext) -> NetworkOutputs:
-        """
-        Executes the forward pass based on the current optimization phase.
+        """Run the EINN on the target time grid, which may differ from input length.
 
-        :param PhaseContext context: Contains the models, inputs, and phase identifier.
-        :return NetworkOutputs: Dataclass containing all required tensors for the active phase's loss calculations.
+        x contains the full historical prefix (right-padded to a common length),
+        while t/y/aux_targets describe the shorter aligned target window consisting
+        of a historical overlap plus the forecast horizon.
         """
         out = NetworkOutputs()
         models = context.models
-
         x_input = context.x
-        past_steps = x_input.shape[1]
-
-        # Detach raw time to prevent autograd from traversing back to the data loader
         t_raw = context.t.clone().detach()
+        target_steps = t_raw.shape[1]
+        history_steps = (
+            context.history_steps
+            if context.history_steps is not None
+            else target_steps
+        )
+        history_steps = max(0, min(int(history_steps), target_steps))
 
-        # Extract scaling statistics generated during data preprocessing
         aux_mean = self.scaling_stats.aux_mean.to(t_raw.device)
         aux_std = self.scaling_stats.aux_std.to(t_raw.device)
         t_min = self.scaling_stats.t_min.to(t_raw.device)
         t_max = self.scaling_stats.t_max.to(t_raw.device)
 
-        # Apply Min-Max scaling to time and enable gradient tracking
-        t_range = (t_max - t_min + 1e-8)
+        t_range = t_max - t_min + 1e-8
         t_scaled = ((t_raw - t_min) / t_range).requires_grad_(True)
 
-        # Time Module Processing
-        e_t_full = models.time_module(t=t_scaled)
-        s_t_full = models.output_module(e=e_t_full)
+        # Mechanistic (Time Module) branch.
+        e_t = models.time_module(t=t_scaled)
+        s_t = models.output_module(e=e_t)
+        ds_dt_t_normalized = self._compute_empirical_derivatives(
+            outputs=s_t,
+            time_tensor=t_scaled,
+        )
+        ds_dt_t_nn = ds_dt_t_normalized / t_range
 
-        # Compute derivative with respect to normalized time (ds/dt_norm)
-        ds_t_dt_norm = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_scaled)
+        s_t_real = s_t * aux_std + aux_mean
+        ode_t = models.ode_model.get_derivatives(
+            states=s_t_real,
+            detach_params=False,
+        )
+        ds_dt_t_ode = ode_t.ds_dt / aux_std
 
-        # Scale derivative back to real physical time.
-        # Since t_norm = t_raw / t_range, then dt_norm = dt_raw / t_range.
-        # Therefore, ds/dt_raw = ds/dt_norm * (dt_norm/dt_raw) = ds/dt_norm / t_range.
-        ds_t_dt_nn_full = ds_t_dt_norm / t_range
+        out.e_t = e_t
+        out.s_t = s_t
+        out.ds_dt_T_nn = ds_dt_t_nn
+        out.ds_dt_T_ode = ds_dt_t_ode
+        out.params = ode_t.params
 
-        # Inverse Z-score scaling to map neural states back to physical population fractions [0, 1]
-        s_t_full_real = (s_t_full * aux_std) + aux_mean
-
-        # Calculate analytical physical derivatives using the ODE model
-        ode_solution_full = models.ode_model.get_derivatives(states=s_t_full_real, detach_params=False)
-
-        # Scale analytical derivative to match the neural network's Z-scored loss space.
-        # If real_state = (nn_state * std) + mean, then d(real_state)/dt = d(nn_state)/dt * std.
-        # To compare ODE to NN in the loss function, we must divide the ODE output by std.
-        ds_t_dt_ode_full = ode_solution_full.ds_dt / aux_std
-
-        # Store past (historical) steps in the output container
-        out.e_t = e_t_full[:, :past_steps, :]
-        out.s_t = s_t_full[:, :past_steps, :]
-        out.ds_dt_T_nn = ds_t_dt_nn_full[:, :past_steps, :]
-        out.ds_dt_T_ode = ds_t_dt_ode_full[:, :past_steps, :]
-
-        # Handle time-dependent (dynamic) vs static physical parameters
-        if ode_solution_full.params.dim() == 3:
-            out.params = ode_solution_full.params[:, :past_steps, :]
-        else:
-            out.params = ode_solution_full.params
-
-        # Store future predictions if the curriculum has reached Phase 2
         if context.phase_num >= 2:
-            out.ds_dt_future_T_nn = ds_t_dt_nn_full[:, past_steps:, :]
-            out.ds_dt_future_T_ode = ds_t_dt_ode_full[:, past_steps:, :]
+            out.ds_dt_future_T_nn = ds_dt_t_nn[:, history_steps:, :]
+            out.ds_dt_future_T_ode = ds_dt_t_ode[:, history_steps:, :]
 
-        # Feature Module Processing
+        # Data-driven (Feature Module) branch.
         if context.phase_num >= 3:
-            # The Feature module processes exogenous data. We detach time to prevent gradients
-            # from flowing backwards into the Time Module through the time tensor.
-            e_t_f_full = models.feature_module(x=x_input, t=t_scaled.detach(), mask=context.mask)
-
-            # In Phase 4, the Feature Module's weights are completely frozen.
-            # Detaching the embedding itself ensures no gradients flow back at all.
+            e_t_f = models.feature_module(
+                x=x_input,
+                t=t_scaled.detach(),
+                mask=context.mask,
+            )
             if context.phase_num == 4:
-                e_t_f_full = e_t_f_full.detach()
+                e_t_f = e_t_f.detach()
 
-            s_t_f_full = models.output_module(e=e_t_f_full)
+            s_t_f = models.output_module(e=e_t_f)
+            out.e_t_F = e_t_f
+            out.s_t_F = s_t_f
 
-            out.e_t_F = e_t_f_full[:, :past_steps, :]
-            out.s_t_F = s_t_f_full[:, :past_steps, :]
-
-        # PHASE 4: Feature Gradient Trick and Final Physics Check
+        # Final feature-branch physics check using the gradient trick.
         if context.phase_num == 4:
-            # Compute stable temporal derivative of the latent space using the Time Module
-            de_dt_norm = self._compute_empirical_derivatives(outputs=e_t_full, time_tensor=t_scaled)
-            de_dt_full = de_dt_norm / t_range
+            de_dt_normalized = self._compute_empirical_derivatives(
+                outputs=e_t,
+                time_tensor=t_scaled,
+            )
+            de_dt = de_dt_normalized / t_range
 
-            # Prepare Feature Module embeddings for the chain rule by forcing gradient tracking
-            e_t_f_grad_full = e_t_f_full.clone().detach().requires_grad_(True)
-            s_t_f_grad_full = models.output_module(e=e_t_f_grad_full)
-
-            # Apply the chain-rule trick to get smooth temporal derivatives for exogenous data
-            ds_dt_f_nn_full = self._compute_feature_gradient_trick(
-                s_t_f=s_t_f_grad_full, e_t_f_grad=e_t_f_grad_full, de_dt=de_dt_full
+            e_t_f_grad = e_t_f.clone().detach().requires_grad_(True)
+            s_t_f_grad = models.output_module(e=e_t_f_grad)
+            ds_dt_f_nn = self._compute_feature_gradient_trick(
+                s_t_f=s_t_f_grad,
+                e_t_f_grad=e_t_f_grad,
+                de_dt=de_dt,
             )
 
-            # Map back to physical domain and calculate ODE derivatives
-            s_t_f_grad_full_real = (s_t_f_grad_full * aux_std) + aux_mean
-            ds_dt_f_ode_full = models.ode_model.get_derivatives(states=s_t_f_grad_full_real,
-                                                                detach_params=True).ds_dt / aux_std
+            s_t_f_real = s_t_f_grad * aux_std + aux_mean
+            ds_dt_f_ode = (
+                models.ode_model.get_derivatives(
+                    states=s_t_f_real,
+                    detach_params=True,
+                ).ds_dt / aux_std
+            )
 
-            # Populate the final physics outputs for both past and future horizons
-            out.ds_dt_F_nn = ds_dt_f_nn_full[:, :past_steps, :]
-            out.ds_dt_F_ode = ds_dt_f_ode_full[:, :past_steps, :]
-            out.ds_dt_future_F_nn = ds_dt_f_nn_full[:, past_steps:, :]
-            out.ds_dt_future_F_ode = ds_dt_f_ode_full[:, past_steps:, :]
+            out.ds_dt_F_nn = ds_dt_f_nn
+            out.ds_dt_F_ode = ds_dt_f_ode
+            out.ds_dt_future_F_nn = ds_dt_f_nn[:, history_steps:, :]
+            out.ds_dt_future_F_ode = ds_dt_f_ode[:, history_steps:, :]
 
         return out
+
