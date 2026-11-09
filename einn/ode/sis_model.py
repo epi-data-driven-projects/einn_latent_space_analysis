@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from einn.model.interface.ode_solution import ODESolution
 from einn.ode.base_ode_model import BaseODEModel
+from einn.model.interface.ode_solution import ODESolution
 
 
 class SISModel(BaseODEModel):
@@ -65,6 +65,10 @@ class SISModel(BaseODEModel):
     def get_derivatives(self, states: torch.Tensor, detach_params: bool) -> ODESolution:
         """
         Evaluates internal parameters and returns the structured ODESolution dataclass.
+
+        :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, 2].
+        :param bool detach_params: If True, detaches the parameters from the PyTorch computation graph.
+        :return ODESolution: A dataclass holding the computed derivatives (ds_dt) and the scaled parameters.
         """
         params = self.get_scaled_params(detach=detach_params)
         ds_dt_tensor = self.forward(states=states, params=params)
