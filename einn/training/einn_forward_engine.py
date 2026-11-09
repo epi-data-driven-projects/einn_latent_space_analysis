@@ -1,6 +1,7 @@
 import torch
 
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.interface.phase_context import PhaseContext
 from einn.model.interface.network_outputs import NetworkOutputs
 
@@ -12,13 +13,14 @@ class EINNForwardEngine:
     analytical derivatives, and applying the gradient trick.
     """
 
-    def __init__(self, train_config: EINNTrainConfig):
+    def __init__(self, train_config: EINNTrainConfig, scaling_stats: DataScalingStats):
         """
         Initializes the Forward Engine with the training configuration.
 
         :param EINNTrainConfig train_config: Configuration containing training hyperparameters (e.g., device).
         """
         self.config = train_config
+        self.scaling_stats = scaling_stats
 
     @staticmethod
     def _get_jacobian_rows(outputs: torch.Tensor, inputs: torch.Tensor) -> list[torch.Tensor]:
@@ -72,35 +74,35 @@ class EINNForwardEngine:
         return torch.cat(tensors=ds_dt_list, dim=-1)
 
     def forward(self, context: PhaseContext) -> NetworkOutputs:
-        """
-        Executes the forward pass based on the current optimization phase.
-
-        :param PhaseContext context: Contains the models, inputs, and phase identifier.
-        :return NetworkOutputs: Dataclass containing all required tensors for the active phase.
-        """
         out = NetworkOutputs()
         models = context.models
 
         x_input = context.x
         past_steps = x_input.shape[1]
 
-        # t_grad covers the ENTIRE sequence (past + future steps)
-        t_grad = context.t.clone().detach().requires_grad_(True)
+        # 1. A nyers időt NEM követjük autograd-dal
+        t_raw = context.t.clone().detach()
 
-        # Insert scaling values (if they exist)
-        aux_mean = getattr(self.config, 'aux_mean', torch.tensor(0.0)).to(t_grad.device)
-        aux_std = getattr(self.config, 'aux_std', torch.tensor(1.0)).to(t_grad.device)
-        t_max = getattr(self.config, 't_max', torch.tensor(1.0)).to(t_grad.device)
+        # Skálázási paraméterek kinyerése
+        aux_mean = self.scaling_stats.aux_mean.to(t_raw.device)
+        aux_std = self.scaling_stats.aux_std.to(t_raw.device)
+        t_min = self.scaling_stats.t_min.to(t_raw.device)
+        t_max = self.scaling_stats.t_max.to(t_raw.device)
 
-        # A HÁLÓZATBA BEMENŐ IDŐ SKÁLÁZÁSA [0, 1] KÖZÉ
-        # Mivel t_grad-ból számoljuk, a PyTorch autograd tudni fogja a láncszabályt!
-        t_scaled = t_grad / (t_max + 1e-8)
+        # 2. TELJES MIN-MAX SKÁLÁZÁS ÉS GRADIENS KÖVETÉS A NORMALIZÁLT TÉRBEN!
+        t_range = (t_max - t_min + 1e-8)
+        t_scaled = ((t_raw - t_min) / t_range).requires_grad_(True)
 
         # Phases 1-4: Time Module forward and derivatives
         e_t_full = models.time_module(t=t_scaled)
         s_t_full = models.output_module(e=e_t_full)
 
-        ds_t_dt_nn_full = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_grad)
+        # 3. DERIVÁLÁS A NORMALIZÁLT IDŐ SZERINT (ds/dt_norm)
+        ds_t_dt_norm = self._compute_empirical_derivatives(outputs=s_t_full, time_tensor=t_scaled)
+        
+        # 4. LÁNCSZABÁLY: Visszaskálázás a valós fizikai időre (osztás az intervallummal)
+        ds_t_dt_nn_full = ds_t_dt_norm / t_range
+
         # Transform back to the real space
         s_t_full_real = (s_t_full * aux_std) + aux_mean
         ode_solution_full = models.ode_model.get_derivatives(states=s_t_full_real, detach_params=False)
@@ -113,41 +115,31 @@ class EINNForwardEngine:
         out.ds_dt_T_nn = ds_t_dt_nn_full[:, :past_steps, :]
         out.ds_dt_T_ode = ds_t_dt_ode_full[:, :past_steps, :]
 
-        # If the ODE model uses global, time-independent parameters (e.g., standard SIR/SEIRM),
-        # `params` is a 1D tensor [d_p]. It cannot and should not be sliced along the time axis.
-        # If the model dynamically predicts time-varying parameters (e.g., beta(t) via a neural net),
-        # `params` becomes a 3D tensor [Batch, Seq_len, d_p], which MUST be sliced.
         if ode_solution_full.params.dim() == 3:
             out.params = ode_solution_full.params[:, :past_steps, :]
         else:
             out.params = ode_solution_full.params
 
-        # Phases 2-4: future Time Module derivatives
         if context.phase_num >= 2:
-            # Slicing the future steps into NetworkOutputs
             out.ds_dt_future_T_nn = ds_t_dt_nn_full[:, past_steps:, :]
             out.ds_dt_future_T_ode = ds_t_dt_ode_full[:, past_steps:, :]
 
-        # Phases 3-4: Feature Module forward
         if context.phase_num >= 3:
-            # Feature module requires x, t, and mask
-            # It inherently decodes the entire sequence (past + future) provided in t_grad
+            # Itt a detach fontos, hogy ne menjen vissza gradiens az időn keresztül
             e_t_f_full = models.feature_module(x=x_input, t=t_scaled.detach(), mask=context.mask)
             
-            # TÖKÉLETES LECSATOLÁS: Magát a változót írjuk felül, 
-            # így az out.e_t_F is garantáltan gradiensmentes lesz!
             if context.phase_num == 4:
                 e_t_f_full = e_t_f_full.detach()
             
             s_t_f_full = models.output_module(e=e_t_f_full)
 
-            # Slicing the past steps for the feature module targets
             out.e_t_F = e_t_f_full[:, :past_steps, :]
             out.s_t_F = s_t_f_full[:, :past_steps, :]
 
-        # Phase 4
         if context.phase_num == 4:
-            de_dt_full = self._compute_empirical_derivatives(outputs=e_t_full, time_tensor=t_grad)
+            # 5. UGYANEZ A LÁNCSZABÁLY A LÁTENS TÉR DERIVÁLTJÁRA IS
+            de_dt_norm = self._compute_empirical_derivatives(outputs=e_t_full, time_tensor=t_scaled)
+            de_dt_full = de_dt_norm / t_range
 
             e_t_f_grad_full = e_t_f_full.clone().detach().requires_grad_(True)
             s_t_f_grad_full = models.output_module(e=e_t_f_grad_full)
@@ -160,11 +152,9 @@ class EINNForwardEngine:
             s_t_f_grad_full_real = (s_t_f_grad_full * aux_std) + aux_mean
             ds_dt_f_ode_full = models.ode_model.get_derivatives(states=s_t_f_grad_full_real,
                                                                 detach_params=True).ds_dt / aux_std
-            # Populating current steps
+                                                                
             out.ds_dt_F_nn = ds_dt_f_nn_full[:, :past_steps, :]
             out.ds_dt_F_ode = ds_dt_f_ode_full[:, :past_steps, :]
-
-            # Populating future steps
             out.ds_dt_future_F_nn = ds_dt_f_nn_full[:, past_steps:, :]
             out.ds_dt_future_F_ode = ds_dt_f_ode_full[:, past_steps:, :]
 

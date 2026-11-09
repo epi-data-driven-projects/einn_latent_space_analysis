@@ -29,7 +29,7 @@ def run_latent_space_experiment():
     data_dict = generator.generate(
         initial_states=[0.99, 0.01, 0.0, 0.0, 0.0],
         true_params=[0.4, 0.2, 0.1, 0.05],
-        noise_std=0.02
+        noise_std=0.05
     )
     
     full_x_raw = data_dict["x_raw"]
@@ -58,15 +58,15 @@ def run_latent_space_experiment():
         loss_weights={
             # A Célváltozó (M) és a Mankó (S, E, I, R) tartja a helyén a görbéket!
             'data_T': 5.0, 'data_F': 5.0,
-            'aux': 4.0,  # VISSZAÁLLÍTVA! Ez kényszeríti ki a haranggörbéket!
+            'aux': 5.0,  # VISSZAÁLLÍTVA! Ez kényszeríti ki a haranggörbéket!
 
             # A fizika finomhangolja, hogy a deriváltak matematikailag is stimmeljenek
-            'ode_T': 6.0, 'ode_F': 4.0,
+            'ode_T': 6.0, 'ode_F': 6.0,
             'ode_future_T': 1.0, 'ode_future_F': 1.0,
 
             # Szigorú monotonitás (S csak lefelé, R és M csak felfelé mehet)
-            'mono': 2.0,
-            'param': 0.5,
+            'mono': 2.5,
+            'param': 0.1,
 
             'kd_target': 1.0, 'kd_emb': 1.0,
             'ic': 2.0, 'ic_F': 0.0
@@ -195,5 +195,4 @@ def run_latent_space_experiment():
     print(f"\nA teljes kísérlet lefutott. Az összevont ábra elmentve ide: {filepath}")
 
 if __name__ == "__main__":
-    torch.backends.cudnn.enabled = False
     run_latent_space_experiment()

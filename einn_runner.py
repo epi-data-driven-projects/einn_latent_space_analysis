@@ -2,12 +2,15 @@ import os
 import logging
 from typing import List, Tuple
 
+import torch
+
 from einn.config.einn_model_config import EINNModelConfig
 from einn.config.einn_train_config import EINNTrainConfig
 from einn.data.data_preprocessor import DataPreprocessor
 from einn.data.einn_dataset import EINNDataset
 from einn.data.ode_precalibrator import ODEPreCalibrator
 from einn.data.synthetic_data_generator import SyntheticDataGenerator
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.einn_builder import EINNBuilder
 from einn.model.interface.einn_models import EINNModels
 from einn.model.interface.training_metrics import TrainingMetrics
@@ -89,13 +92,17 @@ class EINNRunner:
             target_idx=assumed_model.target_idx  # <--- EZT ADD HOZZÁ!
         )
 
-        self.train_config.aux_mean = preprocessor.aux_mean
-        self.train_config.aux_std = preprocessor.aux_std
-        self.train_config.t_max = preprocessor.t_max
-        import torch
         ic_physical = torch.tensor(assumed_initial_states, dtype=torch.float32, device=preprocessor.aux_mean.device)
         ic_normalized = (ic_physical - preprocessor.aux_mean) / (preprocessor.aux_std + 1e-8)
         self.train_config.initial_states = ic_normalized.cpu().tolist()        
+
+        scaling_stats = DataScalingStats(
+            aux_mean=preprocessor.aux_mean,
+            aux_std=preprocessor.aux_std,
+            t_min=preprocessor.t_min,
+            t_max=preprocessor.t_max,
+            initial_states=ic_normalized.cpu().tolist()
+        )
 
         dataset = EINNDataset(
             x=batch_dict["x"],
@@ -131,7 +138,7 @@ class EINNRunner:
         self.logger.info(f"Modellek sikeresen inicializálva ({model_t} ODE motorral).")
 
         self.logger.info("=== 5. FÁZIS: EINN Hálózat Tanítása ===")
-        trainer = EINNTrainer(models=models, config=self.train_config)
+        trainer = EINNTrainer(models=models, config=self.train_config, scaling_stats=scaling_stats)
         metrics = trainer.train(dataset=dataset, epochs=epochs, batch_size=batch_size)
 
         self.logger.info("=== 6. FÁZIS: Utófeldolgozás és Mentés ===")
@@ -152,9 +159,7 @@ class EINNRunner:
             historical_x=full_x,
             historical_x_mask=None,
             future_t=full_t,
-            z_mean=preprocessor.aux_mean,
-            z_std=preprocessor.aux_std,
-            t_max=self.train_config.t_max
+            scaling_stats=scaling_stats
         )
 
         pred_np = predicted_states.squeeze(0).cpu().numpy()

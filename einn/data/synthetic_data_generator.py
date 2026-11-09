@@ -3,14 +3,23 @@ import torch
 from einn.ode.base_ode_model import BaseODEModel
 
 class SyntheticDataGenerator:
-    def __init__(self, true_ode_model: BaseODEModel, seq_len: int = 300): # Megnövelt seq_len!
+    def __init__(self, true_ode_model: BaseODEModel, seq_len: int = 200):
         self.true_ode_model = true_ode_model
         self.seq_len = seq_len
 
-    def generate(self, initial_states: list[float], true_params: list[float], noise_std: float = 0.05) -> dict[str, np.ndarray]:
+    def generate(self, initial_states: list[float], true_params: list[float], noise_std: float = 0.05, correlations: dict = None) -> dict[str, np.ndarray]:
         d_s = self.true_ode_model.d_s
         if len(initial_states) != d_s:
             raise ValueError(f"Initial states length ({len(initial_states)}) must match ODE states ({d_s}).")
+
+        # Alapértelmezett korrelációk, ha nem adunk meg mást
+        if correlations is None:
+            correlations = {
+                'mobility': -0.7,      # Erős negatív korreláció a fertőzöttekkel (sokan betegek = otthon maradnak)
+                'temperature': -0.2,   # Enyhe negatív (szezonális hatás)
+                'testing': 0.8,        # Erős pozitív (felfutó ágban több a teszt)
+                'stringency': 0.9      # Nagyon erős pozitív (lezárások követik a csúcsot)
+            }
 
         states = np.zeros((self.seq_len, d_s))
         current_state = torch.tensor([initial_states], dtype=torch.float32)
@@ -28,19 +37,39 @@ class SyntheticDataGenerator:
         noisy_y = pure_y + np.random.normal(loc=0.0, scale=noise_std, size=pure_y.shape)
         noisy_y = np.clip(noisy_y, a_min=0.0, a_max=None)
 
-        # 3. TÖBB EXOGÉN ADAT GENERÁLÁSA (d_x = 5 lesz a zajos Y-nal együtt)
-        # a) Mobilitás (inverz a fertőzöttekkel)
-        mobility = np.ones((self.seq_len, 1)) - noisy_y * 0.5 + np.random.normal(0, 0.02, (self.seq_len, 1))
-        # b) Hőmérséklet (szinuszos szezonalitás)
-        temperature = np.sin(np.linspace(0, 4 * np.pi, self.seq_len)).reshape(-1, 1) * 0.2 + 0.5 + np.random.normal(0, 0.02, (self.seq_len, 1))
-        # c) Tesztelési kapacitás (lineárisan növekvő)
-        testing_cap = np.linspace(0.1, 0.9, self.seq_len).reshape(-1, 1) + np.random.normal(0, 0.01, (self.seq_len, 1))
-        # d) Szigorúsági index (véletlenszerű lépések - random walk)
-        stringency = np.cumsum(np.random.normal(0, 0.01, (self.seq_len, 1)), axis=0)
-        stringency = (stringency - stringency.min()) / (stringency.max() - stringency.min() + 1e-8)
+        # 3. KORRELÁLT EXOGÉN ADATOK GENERÁLÁSA
+        # Normalizáljuk a tiszta Y-t a matematikai keveréshez
+        y_norm = (pure_y - np.mean(pure_y)) / (np.std(pure_y) + 1e-8)
 
-        # Bemeneti mátrix (X) összefűzése
-        noisy_x = np.concatenate([mobility, temperature, testing_cap, stringency, noisy_y], axis=1)
+        def create_correlated_feature(semantic_base: np.ndarray, rho: float, extra_noise: float = 0.05) -> np.ndarray:
+            """
+            Létrehoz egy adott 'rho' korrelációjú jelet a fertőzötti görbével (y_norm).
+            """
+            s_norm = (semantic_base - np.mean(semantic_base)) / (np.std(semantic_base) + 1e-8)
+            # A statisztikai keverés képlete:
+            mixed = rho * y_norm + np.sqrt(1 - rho**2) * s_norm
+            # Plusz egy kis valósághű független zaj
+            mixed += np.random.normal(0, extra_noise, size=mixed.shape)
+            return mixed
+
+        # a) Mobilitás (alapja sima véletlen zaj, amit a fertőzés görbéje inverz módon húz el)
+        base_mobility = np.random.normal(0, 1, (self.seq_len, 1))
+        mobility = create_correlated_feature(base_mobility, rho=correlations['mobility'])
+
+        # b) Hőmérséklet (szinuszos szezonalitás az alapja)
+        base_temp = np.sin(np.linspace(0, 4 * np.pi, self.seq_len)).reshape(-1, 1)
+        temperature = create_correlated_feature(base_temp, rho=correlations['temperature'])
+
+        # c) Tesztelési kapacitás (lineárisan növekvő trend)
+        base_testing = np.linspace(0, 1, self.seq_len).reshape(-1, 1)
+        testing = create_correlated_feature(base_testing, rho=correlations['testing'])
+
+        # d) Szigorúsági index (random walk / halmozott lépések)
+        base_stringency = np.cumsum(np.random.normal(0, 1, (self.seq_len, 1)), axis=0)
+        stringency = create_correlated_feature(base_stringency, rho=correlations['stringency'])
+
+        # Bemeneti mátrix (X) összefűzése: [Mobilitás, Hőmérséklet, Tesztelés, Szigorúság, Zajos Y]
+        noisy_x = np.concatenate([mobility, temperature, testing, stringency, noisy_y], axis=1)
 
         return {
             "x_raw": noisy_x,

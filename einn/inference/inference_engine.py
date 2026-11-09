@@ -1,5 +1,6 @@
 import torch
 
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.interface.einn_models import EINNModels
 
 
@@ -25,9 +26,7 @@ class InferenceEngine:
             historical_x: torch.Tensor,
             historical_x_mask: torch.Tensor,
             future_t: torch.Tensor,
-            z_mean: torch.Tensor | None = None,
-            z_std: torch.Tensor | None = None,
-            t_max: float | None = None
+            scaling_stats: DataScalingStats
     ) -> torch.Tensor:
         """
         Generates future predictions based on a window of historical data and future time steps.
@@ -44,10 +43,12 @@ class InferenceEngine:
         self._set_eval_mode()
 
         with torch.no_grad():
+            t_min = scaling_stats.t_min.to(future_t.device)
+            t_max = scaling_stats.t_max.to(future_t.device)
+            
             # Feature Module obtains the embedding
-            if t_max is not None:
-                future_t = future_t / (t_max + 1e-8)
-
+            if t_max is not None and t_min is not None:
+                future_t = (future_t - t_min) / (t_max - t_min + 1e-8)
             embedding = self.models.feature_module(
                 x=historical_x,
                 t=future_t,
@@ -58,10 +59,9 @@ class InferenceEngine:
             states_prime = self.models.output_module(e=embedding)
 
             # Z-score inverse scaling
-            if z_mean is not None and z_std is not None:
-                z_mean_t = z_mean.to(states_prime.device)
-                z_std_t = z_std.to(states_prime.device)
-                states_prime = (states_prime * z_std_t) + z_mean_t
+            z_mean_t = scaling_stats.aux_mean.to(states_prime.device)
+            z_std_t = scaling_stats.aux_std.to(states_prime.device)
+            states_prime = (states_prime * z_std_t) + z_mean_t
 
             return states_prime
 

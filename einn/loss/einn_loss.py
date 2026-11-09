@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from einn.config.einn_train_config import EINNTrainConfig
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.model.interface.network_outputs import NetworkOutputs
 from einn.model.interface.phase_context import PhaseContext
 from einn.ode.base_ode_model import BaseODEModel
@@ -13,7 +14,7 @@ class EINNLoss(nn.Module):
     Computes the composite loss for the EINN architecture.
     """
 
-    def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel):
+    def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel, scaling_stats: DataScalingStats):
         """
         Initializes the EINNLoss module.
 
@@ -24,6 +25,7 @@ class EINNLoss(nn.Module):
         self.config = config
         self.ode_model = ode_model
         self.weights = config.loss_weights
+        self.scaling_stats = scaling_stats
 
         self.mono_dec_indices = self.ode_model.monotonicity_indices["decreasing"]
         self.mono_inc_indices = self.ode_model.monotonicity_indices["increasing"]
@@ -177,8 +179,7 @@ class EINNLoss(nn.Module):
                          ds_dt=network_outputs.ds_dt_T_ode,
                          inc_indices=self.mono_inc_indices,
                          dec_indices=self.mono_dec_indices))
-            add_loss('ic', self.calc_ic_loss(network_outputs.s_t, phase_context.t, self.config.initial_states))
-        
+            add_loss('ic', self.calc_ic_loss(network_outputs.s_t, phase_context.t, self.scaling_stats.initial_states))        
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:
             add_loss(component_name='ode_T',
@@ -206,8 +207,7 @@ class EINNLoss(nn.Module):
                      loss_tensor=self.calc_knowledge_distillation_loss(
                          target=network_outputs.e_t.detach(),
                          prediction=network_outputs.e_t_F))
-            add_loss('ic_F', self.calc_ic_loss(network_outputs.s_t_F, phase_context.t, self.config.initial_states))
-    
+            add_loss('ic_F', self.calc_ic_loss(network_outputs.s_t_F, phase_context.t, self.scaling_stats.initial_states))    
         # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
             add_loss(component_name='ode_F',

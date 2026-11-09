@@ -53,6 +53,7 @@ class EINNTrainConfig:
 
     aux_mean: float = 0.0
     aux_std: float = 1.0
+    t_min : float = 0.0
     t_max: float = 1.0
 
     initial_states: List[float] = field(default_factory=list)

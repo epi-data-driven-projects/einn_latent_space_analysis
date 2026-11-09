@@ -21,6 +21,7 @@ class DataPreprocessor:
         self.y_mean: torch.Tensor | None = None
         self.y_std: torch.Tensor | None = None
 
+        self.t_min = None
         self.t_max = None
 
     def fit_transform(self, x_raw: np.ndarray, y_raw: np.ndarray, aux_raw: np.ndarray, target_idx: int) -> Dict[
@@ -47,6 +48,7 @@ class DataPreprocessor:
         t_unscaled = np.arange(len(x_raw)).reshape(-1, 1)
 
         # Mentsük el a maximumot egy tenzorba a Forward Engine számára
+        self.t_min = torch.tensor(t_unscaled.min(), dtype=torch.float32)
         self.t_max = torch.tensor(t_unscaled.max(), dtype=torch.float32)
 
         return {
