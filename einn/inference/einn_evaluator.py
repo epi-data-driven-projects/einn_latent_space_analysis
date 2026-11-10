@@ -99,12 +99,12 @@ class EINNEvaluator:
 
         # PCA
         pca = PCA()
-        pca.fit(emb_f)
+        pca.fit(X=emb_f)
         cum_variance = np.cumsum(pca.explained_variance_ratio_)
         # Find how many dimensions are required to explain 99% of the variance
         n_comp_99 = int(np.argmax(cum_variance >= 0.99) + 1)
 
-        pca_coords_3d = PCA(n_components=3).fit_transform(emb_f)
+        pca_coords_3d = PCA(n_components=3).fit_transform(X=emb_f)
 
         results["pca_variance"] = cum_variance
         results["pca_dims_99"] = n_comp_99
@@ -113,15 +113,15 @@ class EINNEvaluator:
         # t-SNE
         # Using perplexity=10.0 as requested in the original script
         tsne = TSNE(n_components=2, perplexity=10.0, random_state=42)
-        tsne_coords = tsne.fit_transform(emb_f)
+        tsne_coords = tsne.fit_transform(X=emb_f)
         results["tsne_coords"] = tsne_coords
 
         # Procrustes Analysis: Measures how much geometric distortion exists between E_T and E_F
-        _, _, disparity = procrustes(emb_t, emb_f)
+        _, _, disparity = procrustes(data1=emb_t, data2=emb_f)
         results["procrustes_disparity"] = float(disparity)
 
         # Paired Cosine Similarity: Measures the angular alignment step-by-step
-        cos_sim = 1 - paired_cosine_distances(emb_t, emb_f)
+        cos_sim = 1 - paired_cosine_distances(X=emb_t, Y=emb_f)
         results["cosine_similarity"] = cos_sim
 
         return results
