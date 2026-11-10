@@ -19,7 +19,7 @@ from einn.model.einn_builder import EINNBuilder
 from einn.ode.seirm_model import SEIRMModel
 from einn.training.einn_trainer import EINNTrainer
 from einn.inference.inference_engine import InferenceEngine
-
+from einn.data.data_scaling_stats import DataScalingStats
 
 TARGET_IDX = 2
 NUM_STATES = 20  # Ezt később egyszerűen átírhatod 50-re!
@@ -42,7 +42,7 @@ def seed_everything(seed: int = 42):
 
 
 class ExpandingWindowDataset(EINNDataset):
-    def __init__(self, x_list, y_list, t_list, aux_list, min_days=10, max_days=200, step=10, device='cpu'):
+    def __init__(self, x_list, y_list, t_list, aux_list, min_days=10, max_days=200, step=10, device='cuda:1'):
         self.device = torch.device(device)
         self.samples = []
 
@@ -175,7 +175,7 @@ def run_generalization_experiment():
     )
 
     train_cfg = EINNTrainConfig(
-        device=device, learning_rate=0.001, epochs_per_phase=450, early_stopping_patience=5,
+        device=device, learning_rate=0.001, epochs_per_phase=450, early_stopping_patience=40,
         loss_weights={
             'data_T': 10.0, 'data_F': 10.0,
             'aux': 4.0,
@@ -193,14 +193,22 @@ def run_generalization_experiment():
     train_cfg.t_min = preprocessor.t_min.to(device)
     train_cfg.t_max = preprocessor.t_max.to(device)
     train_cfg.reps = {
-        'phase_1': 100,
-        'phase_2': 100,
-        'phase_3': 100,
-        'phase_4': 100
+        'phase_1': 1,
+        'phase_2': 1,
+        'phase_3': 1,
+        'phase_4': 1
     }
 
     ic_physical = torch.tensor([0.99, 0.01, 0.0, 0.0, 0.0], dtype=torch.float32, device=device)
     train_cfg.initial_states = ((ic_physical - train_cfg.aux_mean) / (train_cfg.aux_std + 1e-8)).cpu().tolist()
+
+    scaling_stats = DataScalingStats(
+        aux_mean=preprocessor.aux_mean.to(device),
+        aux_std=preprocessor.aux_std.to(device),
+        t_min=preprocessor.t_min.to(device),
+        t_max=preprocessor.t_max.to(device),
+        initial_states=((ic_physical - train_cfg.aux_mean) / (train_cfg.aux_std + 1e-8)).cpu().tolist()
+    )
 
     model_cfg = EINNModelConfig(d_x=5, d_e=20, d_s=5, d_p=4, feature_n_layers=2)
     models = EINNBuilder.build_einn(
@@ -211,8 +219,8 @@ def run_generalization_experiment():
     models.ode_model.target_idx = TARGET_IDX
 
     print("Hálózat betanítása...")
-    trainer = EINNTrainer(models=models, config=train_cfg)
-    trainer.train(dataset=dataset, epochs=20, batch_size=32)
+    trainer = EINNTrainer(models=models, config=train_cfg, scaling_stats=scaling_stats)
+    trainer.train(dataset=dataset, epochs=300, batch_size=32)
 
     # ==========================================
     # 3. AZ 51. ÁLLAM GENERÁLÁSA (SOSEM LÁTOTT ADAT)
@@ -274,9 +282,7 @@ def run_generalization_experiment():
         # 1. Predikció (JAVÍTÁS: t_min átadása a InferenceEngine-nek)
         states_pred = engine.predict_future(
             historical_x=x_test_slice, historical_x_mask=None, future_t=full_t_raw,
-            z_mean=train_cfg.aux_mean, z_std=train_cfg.aux_std, 
-            t_min=train_cfg.t_min, 
-            t_max=train_cfg.t_max
+            scaling_stats=scaling_stats
         )
         pred_np = states_pred.squeeze(0).cpu().numpy()
 
