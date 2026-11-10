@@ -81,7 +81,7 @@ class DataPreprocessor:
             aux_std=self.aux_std,
             t_min=self.t_min,
             t_max=self.t_max,
-            initial_states=ic_normalized.tolist()
+            initial_states=ic_normalized.cpu().tolist()
         )
 
         scaled_data_dict = {

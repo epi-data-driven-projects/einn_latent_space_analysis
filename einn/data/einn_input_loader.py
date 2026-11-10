@@ -145,7 +145,7 @@ class EINNInputLoader:
                 )
 
                 # Anchoring trick: Force the targeted compartment in the auxiliary data to match reality exactly
-                aux[:, self.target_idx] = data["y_raw"].ravel()
+                #aux[:, self.target_idx] = data["y_raw"].ravel()
 
                 x_train.append(data["x_raw"])
                 y_train.append(data["y_raw"])

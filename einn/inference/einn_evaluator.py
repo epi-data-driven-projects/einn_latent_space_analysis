@@ -63,7 +63,7 @@ class EINNEvaluator:
         results = {}
 
         # Slicing the historical input up to the present day (t_end)
-        x_test_slice = x_test[:, :t_end, :].to(self.device)
+        x_test_slice = torch.tensor(x_test[:, :t_end], dtype=torch.float32, device=self.device).unsqueeze(0)
         future_t = future_t.to(self.device)
 
         with torch.no_grad():
