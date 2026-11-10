@@ -15,8 +15,8 @@ from einn.ode.base_ode_model import BaseODEModel
 class EINNInputLoader:
     """
     Data orchestration class responsible for generating synthetic ground-truth data,
-    running ODE pre-calibration, normalizing features (Z-Score), and slicing the data
-    into expanding windows before handing them off to the EINN Runner.
+    running ODE pre-calibration, normalizing features, and slicing the data
+    into expanding windows before handing them off to the EINNRunner.
     """
 
     def __init__(
