@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -7,12 +7,10 @@ from torch.utils.data import Dataset
 
 class ExpandingWindowLoader(Dataset):
     """
-    Data Loader designed explicitly for expanding-prefix forecasting strategies.
+    A PyTorch Dataset designed explicitly for expanding-prefix time-series forecasting.
 
-    It takes multiple time-series sequences (e.g., from different synthetic states or real regions)
-    and slices them into progressively larger temporal windows (from min_days up to max_days).
-    It automatically applies zero-padding to shorter windows and generates standard attention
-    masks to ensure PyTorch compatibility (especially for Multi-Head Attention layers).
+    This loader takes multiple independent temporal sequences and slices them into progressively larger
+    temporal windows (e.g., [0-20], [0-40], [0-60] days).
     """
 
     def __init__(
@@ -27,35 +25,38 @@ class ExpandingWindowLoader(Dataset):
             device: str = 'cpu'
     ):
         """
-        Initializes and pre-computes all expanding windows for the dataset.
+        Initializes and pre-computes all expanding sliding windows for the entire dataset.
 
-        :param List[np.ndarray] x_list: List of exogenous input sequences (one per state).
-        :param List[np.ndarray] y_list: List of ground-truth target sequences.
-        :param List[np.ndarray] t_list: List of unscaled time vectors.
-        :param List[np.ndarray] aux_list: List of ODE pre-calibrated auxiliary curves.
-        :param int min_days: Minimum historical days needed before the first prediction window.
-        :param int max_days: Maximum days available in the dataset (used for global padding).
-        :param int step: The interval at which the window expands (e.g., every 10 days).
-        :param str device: Computation device ('cpu' or 'cuda').
+        :param List[np.ndarray] x_list: List of 2D arrays containing exogenous input sequences (one array per state).
+        :param List[np.ndarray] y_list: List of 2D arrays containing ground-truth target trajectories.
+        :param List[np.ndarray] t_list: List of 2D arrays representing unscaled time vectors.
+        :param List[np.ndarray] aux_list: List of 2D arrays containing ODE pre-calibrated auxiliary curves.
+        :param int min_days: The minimum number of historical days required before predicting the future.
+        :param int max_days: The maximum sequence length in the dataset. Used to standardize tensor sizes via padding.
+        :param int step: The stride/interval at which the window expands (e.g., expanding by 10 days at a time).
+        :param str device: The target computation device ('cpu' or 'cuda').
         """
         self.device = torch.device(device)
         self.samples = []
 
-        # Iterate over all independently simulated states (e.g., 20 different parameterizations)
+        # Iterate over all independently simulated states (e.g., 20 different regions or parameterizations)
         for x, y, t, aux in zip(x_list, y_list, t_list, aux_list):
 
-            # Slice each sequence into progressively larger windows
+            # Slice each full sequence into progressively larger historical windows
             for current_days in range(min_days, max_days + 1, step):
-                # Zero-padding the exogenous inputs up to max_days to ensure batch consistency
+                # Padding the exogenous inputs
+                # Shorter sequences are padded with 0.0 up to max_days to ensure uniform tensor shapes for batching
                 x_padded = torch.zeros((max_days, x.shape[1]), dtype=torch.float32, device=self.device)
                 x_padded[:current_days] = torch.tensor(x[:current_days], dtype=torch.float32, device=self.device)
 
-                # Generating attention masks. PyTorch MHA (key_padding_mask) expects True for padded elements.
-                # Here, we generate a float mask where 0.0 is padding and 1.0 is valid data.
-                # Note: The Runner/Trainer should invert this to Boolean (False=valid, True=padding) if used in MHA.
+                # Generating the Attention Mask
+                # A float mask where 1.0 represents valid real data and 0.0 represents the padded future.
+                # (Note: PyTorch MultiHeadAttention requires boolean masks where True = padding, so this mask
+                # will be inverted inside the Dataset __getitem__ or the Runner logic before being fed to MHA).
                 mask = torch.zeros(max_days, dtype=torch.float32, device=self.device)
                 mask[:current_days] = 1.0
 
+                # 3. Store the pre-computed window as a dictionary ready for the DataLoader
                 self.samples.append({
                     'X': x_padded,
                     'mask': mask,
@@ -65,7 +66,18 @@ class ExpandingWindowLoader(Dataset):
                 })
 
     def __len__(self) -> int:
+        """
+        Returns the total number of expanding windows generated across all states.
+
+        :return int: Total number of samples.
+        """
         return len(self.samples)
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
+        """
+        Retrieves a specific windowed dictionary by index.
+
+        :param int index: The batch index requested by the PyTorch DataLoader.
+        :return Dict[str, torch.Tensor]: A dictionary containing the padded tensors and masks.
+        """
         return self.samples[index]
