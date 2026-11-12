@@ -37,7 +37,7 @@ class EINNTrainer:
         self.logger = logging.getLogger(__name__)
 
         self.engine = EINNForwardEngine(train_config=config, scaling_stats=scaling_stats)
-        self.loss_calculator = EINNLoss(config=config, ode_model=models.ode_model)
+        self.loss_calculator = EINNLoss(config=config, ode_model=models.ode_model, scaling_stats=scaling_stats)
 
         # Initialize the 4 separate Phase Optimizers, preserving their independent Adam states
         self.opt_phase1 = Phase1Optimizer(models=models, config=config, engine=self.engine,
