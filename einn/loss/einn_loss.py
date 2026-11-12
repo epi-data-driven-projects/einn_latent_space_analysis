@@ -20,7 +20,6 @@ class EINNLoss(nn.Module):
 
         :param EINNTrainConfig config: The configuration object containing loss weights.
         :param BaseODEModel ode_model: The epidemiological ODE model providing monotonicity rules.
-        :param DataScalingStats scaling_stats: The runtime scaling statistics, used to retrieve initial states.
         """
         super().__init__()
         self.config = config
@@ -33,21 +32,16 @@ class EINNLoss(nn.Module):
 
     def calc_data_loss(self, states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
-        Calculates the Mean Squared Error (MSE) between predicted states and observed data.
-        Assumes targets map to the first dim(targets) compartments (e.g., Infected).
-
-        :param torch.Tensor states: Predicted compartment states. Shape: [Batch, Seq_len, d_s].
-        :param torch.Tensor targets: Ground truth observations. Shape: [Batch, Seq_len, target_dim].
-        :return torch.Tensor: Data MSE loss.
+        Calculates the Mean Squared Error (MSE) between predicted states and observed data
+        using the specific target_idx defined in the ODE model.
         """
         if states.numel() == 0 or targets.numel() == 0:
             return torch.tensor(data=0.0, dtype=torch.float32, device=states.device)
 
+        # Helyes indexelés: kivágjuk a Célváltozó (pl. 'I') egyetlen oszlopát
         idx = self.ode_model.target_idx
 
-        # Slice the states tensor to extract only the target compartment's predictions.
-        # :idx:idx+1 ensures the slice retains its trailing dimension (e.g., [Batch, Seq_len, 1]).
-        return F.mse_loss(input=states[:, :, :idx:idx + 1], target=targets)
+        return F.mse_loss(input=states[:, :, idx:idx + 1], target=targets)
 
     @staticmethod
     def calc_aux_loss(states: torch.Tensor, aux_targets: torch.Tensor) -> torch.Tensor:
@@ -137,42 +131,16 @@ class EINNLoss(nn.Module):
             return torch.tensor(data=0.0, dtype=torch.float32, device=prediction.device)
 
         return F.mse_loss(input=prediction, target=target)
-
+    
     @staticmethod
     def calc_ic_loss(states: torch.Tensor, t: torch.Tensor, initial_states: list[float]) -> torch.Tensor:
-        """
-        Calculates the Initial Condition (IC) loss to enforce the physical starting state of the system at t=0.
-        This anchors the neural network's predictions at the beginning of the trajectory to the known
-        biological baseline.
-
-        :param torch.Tensor states: The predicted physical compartments over time. Shape: [Batch, Seq_len, d_s].
-        :param torch.Tensor t: The time steps associated with the predictions. Shape: [Batch, Seq_len, 1].
-        :param list[float] initial_states: A list of the normalized ground truth initial compartment values.
-                                           Length: d_s.
-        :return torch.Tensor: The MSE loss between the predicted states at t = 0 and the true initial_states.
-        """
-        if states.numel() == 0 or t.numel() == 0 or not initial_states:
-            return torch.tensor(0.0, device=states.device)
-
-        # Create a boolean mask to isolate the exact time steps that represent t = 0
-        # Using a small tolerance (1e-3) is safer than strict equality for floating-point tensors
-        # Squeeze removes the trailing dimension of 't' for boolean indexing
+        if states.numel() == 0 or t.numel() == 0 or not initial_states: return torch.tensor(0.0, device=states.device)
         mask_t0 = (t < 1e-3).squeeze(-1)
-
-        # If the batch does not contain t = 0 (e.g., in a sliding window far in the future), IC loss is zero
-        if not mask_t0.any():
-            return torch.tensor(0.0, device=states.device)
-
-        # Extract only the predicted state vectors that correspond to t = 0
+        if not mask_t0.any(): return torch.tensor(0.0, device=states.device)
         states_at_t0 = states[mask_t0]
-
-        # Convert the list of ground truth initial states to a tensor.
-        # Expand it to match the batch dimension of 'states_at_t0' so they can be compared directly.
-        target_ic = torch.tensor(initial_states, dtype=torch.float32, device=states.device) \
-            .unsqueeze(0) \
-            .expand(states_at_t0.shape[0], -1)
-
+        target_ic = torch.tensor(initial_states, dtype=torch.float32, device=states.device).unsqueeze(0).expand(states_at_t0.shape[0], -1)
         return F.mse_loss(states_at_t0, target_ic)
+
 
     def forward(self, phase_context: PhaseContext,
                 network_outputs: NetworkOutputs) -> tuple[torch.Tensor, dict[str, float]]:
@@ -198,94 +166,57 @@ class EINNLoss(nn.Module):
 
         # Phase 1: Train Time Module (Solo Data, Aux & Monotonicity)
         if phase_context.phase_num >= 1:
-            add_loss(
-                component_name='data_T',
-                loss_tensor=self.calc_data_loss(
-                    states=network_outputs.s_t,
-                    targets=phase_context.y)
-            )
-            add_loss(
-                component_name='aux',
-                loss_tensor=self.calc_aux_loss(
-                    states=network_outputs.s_t,
-                    aux_targets=phase_context.aux_targets)
-            )
-            add_loss(
-                component_name='mono',
-                loss_tensor=self.calc_monotonicity_loss(
-                    ds_dt=network_outputs.ds_dt_T_ode,
-                    inc_indices=self.mono_inc_indices,
-                    dec_indices=self.mono_dec_indices)
-            )
-            add_loss(
-                component_name='ic',
-                loss_tensor=self.calc_ic_loss(
-                    states=network_outputs.s_t,
-                    t=phase_context.t,
-                    initial_states=self.scaling_stats.initial_states)
-            )
-
+            add_loss(component_name='data_T',
+                     loss_tensor=self.calc_data_loss(
+                         states=network_outputs.s_t,
+                         targets=phase_context.y))
+            add_loss(component_name='aux',
+                     loss_tensor=self.calc_aux_loss(
+                         states=network_outputs.s_t,
+                         aux_targets=phase_context.aux_targets))
+            add_loss(component_name='mono',
+                     loss_tensor=self.calc_monotonicity_loss(
+                         ds_dt=network_outputs.ds_dt_T_ode,
+                         inc_indices=self.mono_inc_indices,
+                         dec_indices=self.mono_dec_indices))
+            add_loss('ic', self.calc_ic_loss(network_outputs.s_t, phase_context.t, self.scaling_stats.initial_states))        
         # Phase 2: Add ODE Physics to Time Module
         if phase_context.phase_num >= 2:
-            add_loss(
-                component_name='ode_T',
-                loss_tensor=self.calc_ode_loss(
-                    ds_dt_nn=network_outputs.ds_dt_T_nn,
-                    ds_dt_ode=network_outputs.ds_dt_T_ode)
-            )
-            add_loss(
-                component_name='ode_future_T',
-                loss_tensor=self.calc_ode_loss(
-                    ds_dt_nn=network_outputs.ds_dt_future_T_nn,
-                    ds_dt_ode=network_outputs.ds_dt_future_T_ode)
-            )
-            add_loss(
-                component_name='param',
-                loss_tensor=self.calc_parameter_smoothness_loss(
-                    params=network_outputs.params)
-            )
+            add_loss(component_name='ode_T',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_T_nn,
+                         ds_dt_ode=network_outputs.ds_dt_T_ode))
+            add_loss(component_name='ode_future_T',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_future_T_nn,
+                         ds_dt_ode=network_outputs.ds_dt_future_T_ode))
+            add_loss(component_name='param',
+                     loss_tensor=self.calc_parameter_smoothness_loss(
+                         params=network_outputs.params))
 
         # Phase 3: Add Feature Module (Data & Knowledge Distillation)
         if phase_context.phase_num >= 3:
-            add_loss(
-                component_name='data_F',
-                loss_tensor=self.calc_data_loss(
-                    states=network_outputs.s_t_F,
-                    targets=phase_context.y)
-            )
-            add_loss(
-                component_name='kd_target',
-                loss_tensor=self.calc_knowledge_distillation_loss(
-                    target=network_outputs.s_t.detach(),
-                    prediction=network_outputs.s_t_F)
-            )
-            add_loss(
-                component_name='kd_emb',
-                loss_tensor=self.calc_knowledge_distillation_loss(
-                    target=network_outputs.e_t.detach(),
-                    prediction=network_outputs.e_t_F)
-            )
-            add_loss(
-                component_name='ic_F',
-                loss_tensor=self.calc_ic_loss(
-                    states=network_outputs.s_t_F,
-                    t=phase_context.t,
-                    initial_states=self.scaling_stats.initial_states)
-            )
-
+            add_loss(component_name='data_F',
+                     loss_tensor=self.calc_data_loss(
+                         states=network_outputs.s_t_F, targets=phase_context.y))
+            add_loss(component_name='kd_target',
+                     loss_tensor=self.calc_knowledge_distillation_loss(
+                         target=network_outputs.s_t.detach(),
+                         prediction=network_outputs.s_t_F))
+            add_loss(component_name='kd_emb',
+                     loss_tensor=self.calc_knowledge_distillation_loss(
+                         target=network_outputs.e_t.detach(),
+                         prediction=network_outputs.e_t_F))
+            add_loss('ic_F', self.calc_ic_loss(network_outputs.s_t_F, phase_context.t, self.scaling_stats.initial_states))    
         # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
-            add_loss(
-                component_name='ode_F',
-                loss_tensor=self.calc_ode_loss(
-                    ds_dt_nn=network_outputs.ds_dt_F_nn,
-                    ds_dt_ode=network_outputs.ds_dt_F_ode)
-            )
-            add_loss(
-                component_name='ode_future_F',
-                loss_tensor=self.calc_ode_loss(
-                    ds_dt_nn=network_outputs.ds_dt_future_F_nn,
-                    ds_dt_ode=network_outputs.ds_dt_future_F_ode)
-            )
+            add_loss(component_name='ode_F',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_F_nn,
+                         ds_dt_ode=network_outputs.ds_dt_F_ode))
+            add_loss(component_name='ode_future_F',
+                     loss_tensor=self.calc_ode_loss(
+                         ds_dt_nn=network_outputs.ds_dt_future_F_nn,
+                         ds_dt_ode=network_outputs.ds_dt_future_F_ode))
 
         return total_loss, loss_dict

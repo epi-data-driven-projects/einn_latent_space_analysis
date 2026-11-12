@@ -17,7 +17,7 @@ from einn.model.einn_builder import EINNBuilder
 # EXPERIMENT CONFIGURATION
 # ==========================================
 TARGET_IDX = 2
-NUM_STATES = 3
+NUM_STATES = 20
 DEVICE = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 OUTPUT_DIR = "./experiment_results/generalization"
 
@@ -59,16 +59,16 @@ def run_generalization_experiment():
     train_cfg = EINNTrainConfig(
         device=DEVICE, learning_rate=0.001, early_stopping_patience=50,
         loss_weights={
-            'data_T': 10.0, 'data_F': 10.0,
+            'data_T': 5.0, 'data_F': 5.0,
             'aux': 4.0,
-            'ode_T': 8.0, 'ode_F': 8.0,
-            'ode_future_T': 1.0, 'ode_future_F': 1.0,
+            'ode_T': 15.0, 'ode_F': 15.0,
+            'ode_future_T': 10.0, 'ode_future_F': 10.0,
             'mono': 3.0,
             'param': 0.1,
-            'kd_target': 10.0, 'kd_emb': 10.0,
+            'kd_target': 1.0, 'kd_emb': 1.0,
             'ic': 10.0, 'ic_F': 10.0
         },
-        reps={'phase_1': 1, 'phase_2': 1, 'phase_3': 1, 'phase_4': 1}
+        reps={'phase_1': 100, 'phase_2': 100, 'phase_3': 100, 'phase_4': 100}
     )
 
     runner = EINNRunner(output_dir=OUTPUT_DIR, model_cfg=model_cfg, train_cfg=train_cfg, seed=42)
@@ -78,7 +78,7 @@ def run_generalization_experiment():
         model_type="SEIRM",
         target_idx=TARGET_IDX,
         param_calibration={"beta": 0.4, "alpha": 0.2, "gamma": 0.1, "mu": 0.05},
-        epochs=400,
+        epochs=5,
         batch_size=32
     )
 

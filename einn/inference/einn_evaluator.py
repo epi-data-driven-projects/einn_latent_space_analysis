@@ -63,7 +63,7 @@ class EINNEvaluator:
         results = {}
 
         # Slicing the historical input up to the present day (t_end)
-        x_test_slice = torch.tensor(x_test[:, :t_end], dtype=torch.float32, device=self.device).unsqueeze(0)
+        x_test_slice = torch.tensor(x_test[:t_end], dtype=torch.float32, device=self.device).unsqueeze(0)
         future_t = future_t.to(self.device)
 
         with torch.no_grad():
@@ -87,11 +87,28 @@ class EINNEvaluator:
             results["predicted_trajectory"] = predicted_target
             results["mse_future"] = mse_future
 
+            t_min = scaling_stats.t_min.to(future_t.device)
+
+            t_max = scaling_stats.t_max.to(future_t.device)
+
+
+            future_t_scaled = (future_t - t_min) / (t_max - (t_min + 1e-8))
+
             # Latent Space Extraction
-            e_t_tensor = self.models.time_module(t=future_t)
+            e_t_tensor = self.models.time_module(t=future_t_scaled)
+
             emb_t = e_t_tensor.squeeze(0).cpu().numpy()
 
-            e_f_tensor = self.models.feature_module(x=x_test_slice, t=future_t, mask=None)
+
+            e_f_tensor = self.models.feature_module(x=x_test_slice, t=future_t_scaled, mask=None)
+
+            emb_f = e_f_tensor.squeeze(0).cpu().numpy() 
+
+            # Latent Space Extraction
+            e_t_tensor = self.models.time_module(t=future_t_scaled)
+            emb_t = e_t_tensor.squeeze(0).cpu().numpy()
+
+            e_f_tensor = self.models.feature_module(x=x_test_slice, t=future_t_scaled, mask=None)
             emb_f = e_f_tensor.squeeze(0).cpu().numpy()
 
             results["latent_time"] = emb_t
