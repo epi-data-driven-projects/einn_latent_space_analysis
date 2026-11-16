@@ -63,7 +63,7 @@ class EINNEvaluator:
         results = {}
 
         # Slicing the historical input up to the present day (t_end)
-        x_test_slice = x_test[:, :t_end, :].to(self.device)
+        x_test_slice = torch.tensor(x_test[:t_end], dtype=torch.float32, device=self.device).unsqueeze(0)
         future_t = future_t.to(self.device)
 
         with torch.no_grad():
@@ -87,41 +87,50 @@ class EINNEvaluator:
             results["predicted_trajectory"] = predicted_target
             results["mse_future"] = mse_future
 
+            t_min = scaling_stats.t_min.to(future_t.device)
+            t_max = scaling_stats.t_max.to(future_t.device)
+
+            future_t_scaled = (future_t - t_min) / (t_max - (t_min + 1e-8))
+
             # Latent Space Extraction
-            e_t_tensor = self.models.time_module(t=future_t)
+            e_t_tensor = self.models.time_module(t=future_t_scaled)
+
             emb_t = e_t_tensor.squeeze(0).cpu().numpy()
 
-            e_f_tensor = self.models.feature_module(x=x_test_slice, t=future_t, mask=None)
+            e_f_tensor = self.models.feature_module(x=x_test_slice, t=future_t_scaled, mask=None)
+
             emb_f = e_f_tensor.squeeze(0).cpu().numpy()
 
             results["latent_time"] = emb_t
             results["latent_feature"] = emb_f
 
+            print(f"\nlatent_feature:\n {emb_f}")
+
         # PCA
         pca = PCA()
-        pca.fit(X=emb_f)
+        pca.fit(emb_f)
         cum_variance = np.cumsum(pca.explained_variance_ratio_)
         # Find how many dimensions are required to explain 99% of the variance
-        n_comp_99 = int(np.argmax(cum_variance >= 0.99) + 1)
+        n_comp_99 = int(np.argmax(cum_variance >= 0.95) + 1)
 
-        pca_coords_3d = PCA(n_components=3).fit_transform(X=emb_f)
+        pca_coords_3d = PCA(n_components=3).fit_transform(emb_f)
 
         results["pca_variance"] = cum_variance
-        results["pca_dims_99"] = n_comp_99
+        results["pca_dims_95"] = n_comp_99
         results["pca_coords_3d"] = pca_coords_3d
 
         # t-SNE
         # Using perplexity=10.0 as requested in the original script
         tsne = TSNE(n_components=2, perplexity=10.0, random_state=42)
-        tsne_coords = tsne.fit_transform(X=emb_f)
+        tsne_coords = tsne.fit_transform(emb_f)
         results["tsne_coords"] = tsne_coords
 
         # Procrustes Analysis: Measures how much geometric distortion exists between E_T and E_F
-        _, _, disparity = procrustes(data1=emb_t, data2=emb_f)
+        _, _, disparity = procrustes(emb_t, emb_f)
         results["procrustes_disparity"] = float(disparity)
 
         # Paired Cosine Similarity: Measures the angular alignment step-by-step
-        cos_sim = 1 - paired_cosine_distances(X=emb_t, Y=emb_f)
+        cos_sim = 1 - paired_cosine_distances(emb_t, emb_f)
         results["cosine_similarity"] = cos_sim
 
         return results
