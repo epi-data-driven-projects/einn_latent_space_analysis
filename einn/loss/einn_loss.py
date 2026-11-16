@@ -46,8 +46,7 @@ class EINNLoss(nn.Module):
         idx = self.ode_model.target_idx
 
         # Slice the states tensor to extract only the target compartment's predictions.
-        # :idx:idx+1 ensures the slice retains its trailing dimension (e.g., [Batch, Seq_len, 1]).
-        return F.mse_loss(input=states[:, :, :idx:idx + 1], target=targets)
+        return F.mse_loss(input=states[:, :, idx:idx + 1], target=targets)
 
     @staticmethod
     def calc_aux_loss(states: torch.Tensor, aux_targets: torch.Tensor) -> torch.Tensor:
