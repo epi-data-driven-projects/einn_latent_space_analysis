@@ -72,7 +72,8 @@ def integrated_trainer_setup(einn_configs: dict, scaling_stats: DataScalingStats
         train_config=train_config,
         param_calibration={"beta": 0.4, "alpha": 0.2, "gamma": 0.1, "mu": 0.05},
         model_type="SEIRM",
-        seed=42
+        seed=42,
+        target_idx=1
     )
 
     trainer = EINNTrainer(models=models, config=train_config, scaling_stats=scaling_stats)
@@ -130,8 +131,8 @@ def test_trainer_phase_routing_and_reps(integrated_trainer_setup: dict):
 
     metrics = trainer.train(dataset=dataset, epochs=2, batch_size=2)
 
-    # Executions per epoch = 2 + 1 + 0 + 1 = 4 phases run. Total for 2 epochs = 8 metrics.
-    assert len(metrics) == 8, f"Expected 8 recorded metrics, got {len(metrics)}."
+    # Executions per epoch = 3 + 1 + 0 + 1 = 5 phases run. Total for 2 epochs = 10 metrics.
+    assert len(metrics) == 10, f"Expected 8 recorded metrics, got {len(metrics)}."
 
     assert isinstance(metrics[0], TrainingMetrics), "Trainer did not return TrainingMetrics objects."
     assert metrics[0].epoch == 1 and metrics[0].phase == 1 and metrics[0].rep == 1, \
