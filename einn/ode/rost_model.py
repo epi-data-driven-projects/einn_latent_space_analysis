@@ -87,8 +87,8 @@ class RostHungaryModel(BaseODEModel):
 
         # Cumulative Trackers
         dinf = 2 * alpha_l * l2
-        dhosp = h * (1 - xi) * 3 * gamma_s * is3 + h * xi * 3 * gamma_s * is3
-        dicu = h * xi * 3 * gamma_s * is3
+        dhosp = 3 * h * gamma_s * is3
+        dicu = 3 * h * xi * gamma_s * is3
 
         return torch.cat(tensors=(
             ds, dl1, dl2, dip, dia1, dia2, dia3, dis1, dis2, dis3,
