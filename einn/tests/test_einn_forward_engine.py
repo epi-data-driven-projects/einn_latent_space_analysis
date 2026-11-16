@@ -57,6 +57,7 @@ def initialized_models() -> EINNModels:
         train_config=train_config,
         param_calibration=calib,
         model_type="SEIRM",
+        target_idx=1,
         seed=42
     )
 
