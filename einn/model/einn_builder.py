@@ -8,6 +8,7 @@ from einn.model.output_module import OutputModule
 from einn.model.time_module import TimeModule
 from einn.ode.seirm_model import SEIRMModel
 from einn.ode.sir_model import SIRModel
+from einn.ode.rost_model import RostHungaryModel
 
 
 class EINNBuilder:
@@ -21,6 +22,7 @@ class EINNBuilder:
         model_config: EINNModelConfig,
         train_config: EINNTrainConfig,
         param_calibration: dict,
+        target_idx: int,
         model_type: str = "SEIRM",
         population_n: float | None = 1.0,
         seed: int = 42
@@ -31,6 +33,7 @@ class EINNBuilder:
         :param EINNModelConfig model_config: The configuration object for neural architectures.
         :param EINNTrainConfig train_config: The configuration object for training (used for device).
         :param dict param_calibration: Initial parameters for the ODE model.
+        :param int target_idx: The index of the target compartment.
         :param str model_type: Type of ODE model to build ('SIR' or 'SEIRM').
         :param Optional[float] population_n: Total population for the SEIRM model.
         :param int seed: Seed for random operations in modules (e.g., Fourier mapping).
@@ -57,10 +60,14 @@ class EINNBuilder:
             d_s=model_config.d_s
         ).to(device=train_config.device)
 
+        model_type = model_type.upper()
+
         if model_type == "SEIRM":
-            ode_model = SEIRMModel(population_n=population_n)
+            ode_model = SEIRMModel(population_n=population_n, target_idx=target_idx)
         elif model_type == "SIR":
-            ode_model = SIRModel()
+            ode_model = SIRModel(target_idx=target_idx)
+        elif model_type == "ROST":
+            ode_model = RostHungaryModel(target_idx=target_idx)
         else:
             raise ValueError(f"Unsupported ODE model type: {model_type}")
 
