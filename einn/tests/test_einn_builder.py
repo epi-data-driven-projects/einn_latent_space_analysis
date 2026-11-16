@@ -66,7 +66,8 @@ def test_builder_instantiates_sir_model_and_networks(
         model_config=base_model_config,
         train_config=base_train_config,
         param_calibration=base_calibration,
-        model_type="SIR"
+        model_type="SIR",
+        target_idx=1
     )
 
     # Verifying ODE
@@ -99,7 +100,8 @@ def test_builder_unsupported_model_raises_error(
             model_config=base_model_config,
             train_config=base_train_config,
             param_calibration=base_calibration,
-            model_type="UNKNOWN"
+            model_type="UNKNOWN",
+            target_idx=1
         )
 
 
@@ -121,7 +123,8 @@ def test_builder_device_allocation(
         model_config=base_model_config,
         train_config=base_train_config,
         param_calibration=base_calibration,
-        model_type="SIR"
+        model_type="SIR",
+        target_idx=1
     )
 
     assert next(models.time_module.parameters()).device.type == 'cpu', "TimeModule is not on the correct device."
@@ -148,6 +151,7 @@ def test_builder_seed_reproducibility(
         train_config=base_train_config,
         param_calibration=base_calibration,
         model_type="SIR",
+        target_idx=1,
         seed=42
     )
     models_seed_42_b = EINNBuilder.build_einn(
@@ -155,6 +159,7 @@ def test_builder_seed_reproducibility(
         train_config=base_train_config,
         param_calibration=base_calibration,
         model_type="SIR",
+        target_idx=1,
         seed=42
     )
     models_seed_99 = EINNBuilder.build_einn(
@@ -162,6 +167,7 @@ def test_builder_seed_reproducibility(
         train_config=base_train_config,
         param_calibration=base_calibration,
         model_type="SIR",
+        target_idx=1,
         seed=99
     )
 
