@@ -23,7 +23,8 @@ def integrated_inference_setup() -> dict:
         train_config=train_config,
         param_calibration={"beta": 0.4, "alpha": 0.2, "gamma": 0.1, "mu": 0.05},
         model_type="SEIRM",
-        seed=42
+        seed=42,
+        target_idx=1
     )
 
     return {
