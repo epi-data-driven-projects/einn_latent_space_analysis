@@ -4,8 +4,10 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from einn.data.einn_dataset import EINNDataset
 
-class ExpandingWindowLoader(Dataset):
+
+class ExpandingWindowLoader(EINNDataset):
     """
     A PyTorch Dataset designed explicitly for expanding-prefix time-series forecasting.
 
@@ -53,8 +55,8 @@ class ExpandingWindowLoader(Dataset):
                 # A float mask where 1.0 represents valid real data and 0.0 represents the padded future.
                 # (Note: PyTorch MultiHeadAttention requires boolean masks where True = padding, so this mask
                 # will be inverted inside the Dataset __getitem__ or the Runner logic before being fed to MHA).
-                mask = torch.zeros(max_days, dtype=torch.float32, device=self.device)
-                mask[:current_days] = 1.0
+                mask = torch.ones(max_days, dtype=torch.float32, device=self.device)
+                mask[:current_days] = 0.0
 
                 # 3. Store the pre-computed window as a dictionary ready for the DataLoader
                 self.samples.append({

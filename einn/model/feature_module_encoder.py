@@ -65,27 +65,27 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
         # latent_seqs shape: [Batch, Seq_len, rnn_out]
         latent_seqs, _ = self.enc_rnn(input=x)
 
+        latent_seqs, _ = self.attn_layer(
+            query=latent_seqs,
+            key=latent_seqs,
+            value=latent_seqs
+        )
+
         if mask is not None:
-            # PyTorch's MultiheadAttention expects True for elements that should be ignored.
-            pytorch_mask = (mask == 0).bool()
+            # 2. JAVÍTÁS: Manuális maszkolás az Attention UTÁN!
+            # valid_mask: 1 ha valós, 0 ha padding. Shape: [Batch, Seq_len, 1]
+            valid_mask = (1 - mask).unsqueeze(-1)
 
-            latent_seqs, _ = self.attn_layer(
-                query=latent_seqs,
-                key=latent_seqs,
-                value=latent_seqs,
-                key_padding_mask=pytorch_mask
-            )
+            # Kinullázzuk a paddingelt napok rejtett állapotait
+            latent_seqs *= valid_mask
+
+            # Átlagolás szigorúan a valós napok számával
+            # A clamp(min=1) megvéd a nullával osztástól
+            h = latent_seqs.sum(dim=1) / valid_mask.sum(dim=1).clamp(min=1)
         else:
-            latent_seqs, _ = self.attn_layer(
-                query=latent_seqs,
-                key=latent_seqs,
-                value=latent_seqs
-            )
+            # Ha nincs maszk, egyszerű átlagolás (ezt használjuk inferenciánál a teljes soron)
+            h = latent_seqs.mean(dim=1)
 
-        # Aggregate over the time dimension (dim=1) to create a single context vector per batch
-        # Shape becomes: [Batch, rnn_out]
-        latent_seqs = latent_seqs.sum(dim=1)
-
-        # Final projection
-        h = self.enc_out_layer(input=latent_seqs)
+            # Final projection
+        h = self.enc_out_layer(input=h)
         return h
