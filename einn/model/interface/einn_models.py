@@ -11,10 +11,10 @@ class EINNModels:
     """
     Container data class for the instantiated neural networks and ODE model.
 
-    :param TimeModule time_module: the initialized TimeModule
-    :param FeatureModule feature_module: the initialized FeatureModule
-    :param OutputModule output_module: the initialized shared OutputModule
-    :param BaseODEModel ode_model: the initialized epidemiological ODE model
+    :param time_module: the initialized TimeModule
+    :param feature_module: the initialized FeatureModule
+    :param output_module: the initialized shared OutputModule
+    :param ode_model: the initialized epidemiological ODE model
     """
     time_module: TimeModule
     feature_module: FeatureModule

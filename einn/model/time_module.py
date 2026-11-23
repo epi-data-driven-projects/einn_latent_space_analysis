@@ -20,25 +20,21 @@ class TimeModule(BaseNeuralNetwork):
         :param int seed: Random seed for reproducible b_gauss generation.
         """
         super().__init__()
-
-        # Generate and register the fixed Gaussian matrix b_gauss.
-        # register_buffer ensures b_gauss automatically moves to the GPU when .to(device) is called.
-        np.random.seed(seed)
-        b_gauss = np.random.normal(size=(mapping_size, 1)) * scale
-        self.register_buffer('b_gauss', torch.from_numpy(b_gauss).float())
+        rng = np.random.default_rng(seed)
+        b_gauss = rng.normal(size=(mapping_size, 1)) * scale
+        self.register_buffer("b_gauss", torch.from_numpy(b_gauss).float())
+        self.out_dim = int(out_dim)
 
         hidden_dim = 2 * mapping_size
-        act_fcn = nn.Tanh()
-
         self.net = nn.Sequential(
-            nn.Linear(in_features=hidden_dim, out_features=hidden_dim),
-            act_fcn,
-            nn.Linear(in_features=hidden_dim, out_features=hidden_dim),
-            act_fcn,
-            nn.Linear(in_features=hidden_dim, out_features=hidden_dim),
-            act_fcn,
-            nn.Linear(in_features=hidden_dim, out_features=out_dim),
-            act_fcn
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, out_dim),
+            nn.Tanh(),
         )
 
         self.net.apply(self._init_weights)
@@ -53,20 +49,13 @@ class TimeModule(BaseNeuralNetwork):
         if self.b_gauss is None:
             return t
 
-        # t is [Batch, Seq_len, 1], B_gauss.T is [1, mapping_size].
-        # Resulting x_proj is [Batch, Seq_len, mapping_size].
-        x_proj = (2. * np.pi * t) @ self.b_gauss.T
 
-        # Concatenate sin and cos along the last dimension.
-        # Final shape: [Batch, Seq_len, 2 * mapping_size].
-        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+        :param torch.Tensor t: Time coordinates of the modeled trajectory.
+        :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+        """
+        x_proj = (2.0 * np.pi * t) @ self.b_gauss.T
+        return torch.cat((torch.sin(x_proj), torch.cos(x_proj)), dim=-1)
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass for the Time Module.
-        :param torch.Tensor t: Time vector. Shape: [Batch, Seq_len, 1].
-        :return torch.Tensor: Time-based embedding (e_t). Shape: [Batch, Seq_len, out_dim].
-        """
-        mapped_inputs = self.apply_fourier_mapping(t=t)
-        emb_e = self.net(mapped_inputs)
-        return emb_e
+        return self.net(self.apply_fourier_mapping(t))

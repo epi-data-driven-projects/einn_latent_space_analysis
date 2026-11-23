@@ -18,14 +18,15 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
             bidirectional: bool = True,
             dropout: float = 0.0
     ):
-        """
-        Initializes the Encoder architecture.
+        """Initializes the Encoder architecture.
 
         :param int dim_seq_in: Dimensionality of input data features (d_x).
         :param int rnn_out: Hidden size of the RNN layers.
         :param int n_layers: Number of recurrent layers.
         :param bool bidirectional: Whether the Encoder GRU is bidirectional.
         :param float dropout: Dropout probability.
+
+        :return None: No return value; state or serialized artifacts are updated in place.
         """
         super().__init__()
 
@@ -65,27 +66,32 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
         # latent_seqs shape: [Batch, Seq_len, rnn_out]
         latent_seqs, _ = self.enc_rnn(input=x)
 
+        key_padding_mask = None
+
         if mask is not None:
-            # PyTorch's MultiheadAttention expects True for elements that should be ignored.
-            pytorch_mask = (mask == 0).bool()
+            key_padding_mask = mask.bool()
 
-            latent_seqs, _ = self.attn_layer(
-                query=latent_seqs,
-                key=latent_seqs,
-                value=latent_seqs,
-                key_padding_mask=pytorch_mask
-            )
+        latent_seqs, _ = self.attn_layer(
+            query=latent_seqs,
+            key=latent_seqs,
+            value=latent_seqs,
+            key_padding_mask=key_padding_mask
+        )
+
+        if mask is not None:
+            # The mask equals one for observed values and zero for padding.
+            valid_mask = (1 - mask).unsqueeze(-1)
+
+            # Remove hidden activations at padded time points.
+            latent_seqs *= valid_mask
+
+            # Average over observed time points only.
+            # Protect the denominator against division by zero.
+            h = latent_seqs.sum(dim=1) / valid_mask.sum(dim=1).clamp(min=1)
         else:
-            latent_seqs, _ = self.attn_layer(
-                query=latent_seqs,
-                key=latent_seqs,
-                value=latent_seqs
-            )
-
-        # Aggregate over the time dimension (dim=1) to create a single context vector per batch
-        # Shape becomes: [Batch, rnn_out]
-        latent_seqs = latent_seqs.sum(dim=1)
+            # Average over observed time points only.
+            h = latent_seqs.mean(dim=1)
 
         # Final projection
-        h = self.enc_out_layer(input=latent_seqs)
+        h = self.enc_out_layer(input=h)
         return h

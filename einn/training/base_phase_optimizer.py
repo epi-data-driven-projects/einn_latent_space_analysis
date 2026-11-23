@@ -74,21 +74,6 @@ class BasePhaseOptimizer(ABC):
         """
         pass
 
-    def apply_grad_clip(self):
-        """
-        Applies gradient clipping to all network parameters globally.
-
-        PINNs heavily rely on computing derivatives of the network
-        outputs with respect to time (ds/dt). Early in training, when the network's predictions severely
-        violate the strict ODE physics, the resulting loss gradients can become large. Clipping the L2 norm of
-        the gradients to a maximum of 1.0 ensures numerical stability and prevents the optimizer
-        from taking catastrophic steps.
-        """
-        torch.nn.utils.clip_grad_norm_(self.models.time_module.parameters(), max_norm=1.0)
-        torch.nn.utils.clip_grad_norm_(self.models.feature_module.parameters(), max_norm=1.0)
-        torch.nn.utils.clip_grad_norm_(self.models.output_module.parameters(), max_norm=1.0)
-        torch.nn.utils.clip_grad_norm_(self.models.ode_model.parameters(), max_norm=1.0)
-
     def step(self, context: PhaseContext) -> tuple[float, dict[str, float]]:
         """
         Executes a full optimization iteration: Forward -> Loss -> Backward -> Step.
@@ -114,9 +99,6 @@ class BasePhaseOptimizer(ABC):
 
         # Backward pass
         total_loss.backward()
-
-        # Safeguard against exploding gradients
-        self.apply_grad_clip()
 
         # Update weights
         self.optimizer.step()

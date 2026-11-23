@@ -4,13 +4,13 @@ from typing import List
 from torch.utils.data import DataLoader
 
 from einn.config.einn_train_config import EINNTrainConfig
-from einn.data.data_scaling_stats import DataScalingStats
 from einn.data.einn_dataset import EINNDataset
 from einn.loss.einn_loss import EINNLoss
 from einn.model.interface.einn_models import EINNModels
 from einn.model.interface.phase_context import PhaseContext
 from einn.model.interface.training_metrics import TrainingMetrics
 from einn.training.base_phase_optimizer import BasePhaseOptimizer
+from einn.data.data_scaling_stats import DataScalingStats
 from einn.training.early_stopping import EarlyStopping
 from einn.training.einn_forward_engine import EINNForwardEngine
 from einn.training.phase_optimizers.phase_1_optimizer import Phase1Optimizer
@@ -26,12 +26,13 @@ class EINNTrainer:
     """
 
     def __init__(self, models: EINNModels, config: EINNTrainConfig, scaling_stats: DataScalingStats):
-        """
-        Initializes the trainer, the forward engine, the loss calculator, and all 4 independent phase optimizers.
+        """Initializes the trainer, the forward engine, the loss calculator, and all 4 independent phase optimizers.
 
         :param EINNModels models: The container holding all initialized neural networks and the ODE model.
         :param EINNTrainConfig config: The training configuration object containing hyperparameters.
-        :param DataScalingStats scaling_stats: Container containing runtime scaling statistics and initial states.
+
+        :param DataScalingStats scaling_stats: Statistics fitted on training data for physical-domain conversion.
+        :return None: No return value; state or serialized artifacts are updated in place.
         """
         self.models = models
         self.config = config
@@ -74,27 +75,40 @@ class EINNTrainer:
         for epoch in range(1, epochs + 1):
             self.logger.info(f"--- EPOCH {epoch}/{epochs} ---")
 
-            # Execute phases sequentially based on the provided repetition dictionary
-            all_metrics.extend(self._run_phase(
-                phase_optimizer=self.opt_phase1, phase_num=1, reps=self.config.reps['phase_1'],
-                epoch=epoch, dataloader=dataloader))
+            # ====================================================
+            # Read the first two phases repetition count from the original configuration.
+            # ====================================================
+            # The Time and Feature pretraining phases run consecutively in each repetition.
+            reps_p1_2 = self.config.reps.get('phase_1', 300)
+            for rep in range(1, reps_p1_2 + 1):
+                # Execute phase one using only its assigned optimizer and monitored losses.
+                m1 = self._run_single_rep(self.opt_phase1, phase_num=1, rep=rep, total_reps=reps_p1_2, epoch=epoch, dataloader=dataloader)
+                all_metrics.append(m1)
 
-            all_metrics.extend(self._run_phase(
-                phase_optimizer=self.opt_phase2, phase_num=2, reps=self.config.reps['phase_2'],
-                epoch=epoch, dataloader=dataloader))
+                # Execute phase two using only its assigned optimizer and monitored losses.
+                m2 = self._run_single_rep(self.opt_phase2, phase_num=2, rep=rep, total_reps=reps_p1_2, epoch=epoch, dataloader=dataloader)
+                all_metrics.append(m2)
 
-            all_metrics.extend(self._run_phase(
-                phase_optimizer=self.opt_phase3, phase_num=3, reps=self.config.reps['phase_3'],
-                epoch=epoch, dataloader=dataloader))
+            # ====================================================
+            # Read the number of knowledge-distillation repetitions for phase three.
+            # ====================================================
+            reps_p3 = self.config.reps.get('phase_3', 300)
+            for rep in range(1, reps_p3 + 1):
+                m3 = self._run_single_rep(self.opt_phase3, phase_num=3, rep=rep, total_reps=reps_p3, epoch=epoch, dataloader=dataloader)
+                all_metrics.append(m3)
 
-            # Execute phase 4 and explicitly capture the metrics to a separate variable
-            phase4_metrics = self._run_phase(
-                phase_optimizer=self.opt_phase4, phase_num=4, reps=self.config.reps['phase_4'],
-                epoch=epoch, dataloader=dataloader)
+            # ====================================================
+            # Read the number of final joint training repetitions for phase four.
+            # ====================================================
+            reps_p4 = self.config.reps.get('phase_4', 300)
+            phase4_metrics = []
+            for rep in range(1, reps_p4 + 1):
+                m4 = self._run_single_rep(self.opt_phase4, phase_num=4, rep=rep, total_reps=reps_p4, epoch=epoch, dataloader=dataloader)
+                phase4_metrics.append(m4)
+                all_metrics.append(m4)
 
-            all_metrics.extend(phase4_metrics)
-
-            # Determine which loss to monitor for Early Stopping
+            # Check that the final phase supplied a Feature data-loss component.
+            # Use the final Feature reconstruction loss for the early-stop diagnostic.
             if len(phase4_metrics) > 0 and 'data_F' in phase4_metrics[-1].loss_components:
                 monitored_loss = phase4_metrics[-1].loss_components['data_F']
             elif len(all_metrics) > 0:
@@ -110,61 +124,57 @@ class EINNTrainer:
 
         return all_metrics
 
-    def _run_phase(self, phase_optimizer: BasePhaseOptimizer,
-                   phase_num: int, reps: int, epoch: int, dataloader: DataLoader) -> List[TrainingMetrics]:
+    def _run_single_rep(self, phase_optimizer: BasePhaseOptimizer, phase_num: int,
+                        rep: int, total_reps: int, epoch: int, dataloader: DataLoader) -> TrainingMetrics:
         """
-        Executes a specific optimization phase for a given number of repetitions over the entire dataset.
+        Executes exactly one repetition (one full pass over the dataloader) for a specific optimizer.
 
-        :param BasePhaseOptimizer phase_optimizer: The specific optimizer instance handling the current phase.
-        :param int phase_num: The numerical identifier of the current phase (1, 2, 3, or 4).
-        :param int reps: The number of times to iterate over the entire dataloader in this phase.
-        :param int epoch: The current macroscopic epoch number.
-        :param DataLoader dataloader: The PyTorch dataloader providing batched sequences.
-        :return List[TrainingMetrics]: Metrics recorded during this phase's execution.
+        :param BasePhaseOptimizer phase_optimizer: Optimization helper responsible for the active training phase.
+        :param int phase_num: Number of the currently active training phase.
+        :param int rep: Repetition index within the selected optimization phase.
+        :param int total_reps: Total number of repetitions configured for the phase.
+        :param int epoch: Index of the current outer training epoch.
+        :param DataLoader dataloader: Iterator that yields supervised and masked trajectory batches.
+        :return TrainingMetrics: Computed result in the configured output representation.
         """
-        metrics_list = []
+        total_epoch_loss = 0.0
+        epoch_loss_components = {}
+        batches_count = 0
 
-        for rep in range(1, reps + 1):
-            total_epoch_loss = 0.0
-            epoch_loss_components = {}
-            batches_count = 0
-
-            for batch_data in dataloader:
-                # Construct the PhaseContext using the unpacked batch data
-                context = PhaseContext(
-                    phase_num=phase_num,
-                    epoch=epoch,
-                    x=batch_data['X'],
-                    y=batch_data['y'],
-                    t=batch_data['t'],
-                    aux_targets=batch_data['aux_targets'],
-                    models=self.models,
-                    mask=batch_data.get('mask', None)
-                )
-
-                # Execute the full forward-backward pipeline and retrieve the scalar total loss
-                batch_loss, batch_loss_components = phase_optimizer.step(context=context)
-
-                total_epoch_loss += batch_loss
-
-                for key, value in batch_loss_components.items():
-                    epoch_loss_components[key] = epoch_loss_components.get(key, 0.0) + value
-
-                batches_count += 1
-
-            # Average the loss across all batches processed
-            avg_loss = total_epoch_loss / max(1, batches_count)
-            avg_components = {k: v / max(1, batches_count) for k, v in epoch_loss_components.items()}
-
-            metrics = TrainingMetrics(
+        for batch_data in dataloader:
+            # Construct the PhaseContext using the unpacked batch data
+            context = PhaseContext(
+                phase_num=phase_num,
                 epoch=epoch,
-                phase=phase_num,
-                rep=rep,
-                total_loss=avg_loss,
-                loss_components=avg_components
+                x=batch_data['X'],
+                y=batch_data['y'],
+                t=batch_data['t'],
+                aux_targets=batch_data['aux_targets'],
+                models=self.models,
+                mask=batch_data.get('mask', None)
             )
-            metrics_list.append(metrics)
 
-            print(f"Epoch: {epoch} | Phase: {phase_num} | Rep: {rep}/{reps} | Total Loss: {metrics.total_loss:.4e}")
+            # Execute the full forward-backward pipeline
+            batch_loss, batch_loss_components = phase_optimizer.step(context=context)
+            total_epoch_loss += batch_loss
 
-        return metrics_list
+            # Accumulate component losses
+            for key, value in batch_loss_components.items():
+                epoch_loss_components[key] = epoch_loss_components.get(key, 0.0) + value
+
+            batches_count += 1
+
+        # Average the loss across all batches
+        avg_loss = total_epoch_loss / max(1, batches_count)
+        avg_components = {k: v / max(1, batches_count) for k, v in epoch_loss_components.items()}
+
+        metrics = TrainingMetrics(
+            epoch=epoch,
+            phase=phase_num,
+            rep=rep,
+            total_loss=avg_loss,
+            loss_components=avg_components
+        )
+        print(f"Epoch: {epoch} | Phase: {phase_num} | Rep: {rep}/{total_reps} | Total Loss: {metrics.total_loss:.4e}")
+
+        return metrics

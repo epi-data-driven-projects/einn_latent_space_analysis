@@ -14,10 +14,11 @@ class InferenceEngine:
     """
 
     def __init__(self, models: EINNModels):
-        """
-        Initializes the InferenceEngine with the trained model components.
+        """Initializes the InferenceEngine with the trained model components.
 
         :param EINNModels models: The container holding all trained neural networks and the ODE model.
+
+        :return None: No return value; state or serialized artifacts are updated in place.
         """
         self.models = models
 
@@ -66,8 +67,9 @@ class InferenceEngine:
         return states_prime
 
     def _set_eval_mode(self):
-        """
-        Sets all model components to evaluation mode, disabling Dropout and BatchNorm updates.
+        """Sets all model components to evaluation mode, disabling Dropout and BatchNorm updates.
+
+        :return Any: The computed objects, metrics, or artifact paths for the requested operation.
         """
         self.models.time_module.eval()
         self.models.feature_module.eval()

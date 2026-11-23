@@ -10,8 +10,7 @@ class EINNDataset(Dataset):
     def __init__(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor,
                  aux_targets: torch.Tensor, window_size: int | None = None,
                  device: str = 'cpu'):
-        """
-        Initializes the dataset, detaches tensors from the computation graph, and moves them to the target device.
+        """Initializes the dataset, detaches tensors from the computation graph, and moves them to the target device.
 
         :param torch.Tensor x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
         :param torch.Tensor y : the target variable
@@ -19,6 +18,8 @@ class EINNDataset(Dataset):
         :param torch.Tensor aux_targets: The ideal trajectories (ODE pre-calibration).
         :param Optional[int] window_size: Size of the sliding window. If None, uses the full sequence.
         :param str device: Device to store the dataset tensors on ('cpu' or 'cuda').
+
+        :return None: No return value; state or serialized artifacts are updated in place.
         """
         self.device = torch.device(device)
 
@@ -43,13 +44,14 @@ class EINNDataset(Dataset):
                              f"strictly larger than the sequence length ({self.seq_len}).")
 
     def _prepare_data(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor, aux_targets: torch.Tensor):
-        """
-        Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
+        """Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
 
-        :param x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
-        :param y: the target variable
-        :param t: time vector.
-        :param aux_targets: The ideal trajectories (ODE pre-calibration).
+        :param torch.Tensor x: Observed input features with shape [time, features], optionally batched.
+        :param torch.Tensor y: Target-compartment observations aligned with the input time axis.
+        :param torch.Tensor t: Simulation time coordinates for every trajectory observation.
+        :param torch.Tensor aux_targets: Mechanistic auxiliary compartment reference states.
+
+        :return Any: The computed objects, metrics, or artifact paths for the requested operation.
         """
         # Squeeze out the batch dimension if the user passes tensors in [1, Seq_len, Features] format.
         # This makes the slicing logic in __getitem__ cleaner

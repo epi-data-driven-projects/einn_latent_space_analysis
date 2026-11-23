@@ -10,19 +10,19 @@ class NetworkOutputs:
     Data class container for all neural network predictions, embeddings,
     and calculated derivatives across different modules and time horizons.
 
-    :param s_t: predicted compartment states from the Time module
-    :param s_t_F: predicted compartment states from the Feature module
-    :param e_t: latent embeddings from the Time module
-    :param e_t_F: latent embeddings from the Feature module
-    :param ds_dt_T_nn: empirical derivatives from the Time module (current steps)
-    :param ds_dt_T_ode: analytical ODE derivatives from the Time module (current steps)
-    :param ds_dt_future_T_nn: empirical derivatives from the Time module (future steps)
-    :param ds_dt_future_T_ode: analytical ODE derivatives from the Time module (future steps)
-    :param ds_dt_F_nn: empirical derivatives from the Feature module via gradient trick
-    :param ds_dt_F_ode: analytical ODE derivatives from the Feature module
-    :param ds_dt_future_F_nn: empirical derivatives from the Feature module (future steps)
-    :param ds_dt_future_F_ode: analytical ODE derivatives from the Feature module (future steps)
-    :param params: (time-dependent) physical parameters (omega_t)
+    :param s_t: Time-module prediction of all epidemiological compartments.
+    :param s_t_F: Feature-module prediction of all epidemiological compartments.
+    :param e_t: Time-module latent vector for each requested time coordinate.
+    :param e_t_F: Feature-module latent vector for each requested time coordinate.
+    :param ds_dt_T_nn: Autograd-derived Time-module state derivative on the original horizon.
+    :param ds_dt_T_ode: ODE-right-hand-side Time-module derivative on the original horizon.
+    :param ds_dt_future_T_nn: Autograd-derived Time-module derivative beyond the original horizon.
+    :param ds_dt_future_T_ode: ODE-derived Time-module derivative beyond the original horizon.
+    :param ds_dt_F_nn: Autograd-derived Feature-module state derivative on the original horizon.
+    :param ds_dt_F_ode: ODE-derived Feature-module derivative on the original horizon.
+    :param ds_dt_future_F_nn: Autograd-derived Feature-module state derivative on future time steps.
+    :param ds_dt_future_F_ode: ODE-derived Feature-module derivative on future time steps.
+    :param params: Mechanistic ODE parameter tensor or dictionary, depending on experiment family.
     """
     s_t: Optional[torch.Tensor] = None
     s_t_F: Optional[torch.Tensor] = None
