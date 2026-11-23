@@ -1,0 +1,2 @@
+true_model_a,true_model_b,num_points_a,num_points_b,embedding_dim,hausdorff,directed_a_to_b,directed_b_to_a,hausdorff_p95,mean_nn_a_to_b,mean_nn_b_to_a,hausdorff_unit_normalized,hausdorff_p95_unit_normalized
+SIR,SIS,800,800,5,2.762864773098844,2.554015926191441,2.762864773098844,2.551743279524169,2.4966530511487446,2.203749642247703,1.3878783390922937,1.2510991714863566

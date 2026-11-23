@@ -1,0 +1,63 @@
+{
+  "model": "SIR",
+  "embedding_dim": 20,
+  "num_training_trajectories": 100,
+  "sequence_length": 200,
+  "observation_windows": [
+    10,
+    18,
+    40,
+    80
+  ],
+  "epochs": 5,
+  "batch_size": 32,
+  "seed": 42,
+  "device": "cuda:1",
+  "target_idx": 1,
+  "training_parameter_ranges": {
+    "beta": [
+      0.0,
+      1.0
+    ],
+    "gamma": [
+      0.0,
+      1.0
+    ]
+  },
+  "training_calibration": {
+    "beta": 0.4,
+    "gamma": 0.1
+  },
+  "test_parameters": [
+    0.45,
+    0.1
+  ],
+  "test_initial_states": [
+    0.99,
+    0.01,
+    0.0
+  ],
+  "noise_std": 0.01,
+  "loss_weights": {
+    "data_T": 10.0,
+    "data_F": 10.0,
+    "aux": 8.0,
+    "ode_T": 8.0,
+    "ode_F": 8.0,
+    "ode_future_T": 0.1,
+    "ode_future_F": 0.1,
+    "mono": 6.0,
+    "param": 0.1,
+    "kd_target": 10.0,
+    "kd_emb": 10.0,
+    "ic": 20.0,
+    "ic_F": 20.0
+  },
+  "pca_components_plotted": 8,
+  "training_data_cache": "/mnt/raid/home/zsvizi/einn_latent_space_analysis/experiment_results/generalization/sir/data_cache/7125236f7569",
+  "status": "sikeres",
+  "started_at": "2026-11-20T10:41:29",
+  "finished_at": "2026-11-20T10:51:09",
+  "figure_png": "sir_altalanositas_de_20_4x5.png",
+  "figure_pdf": "sir_altalanositas_de_20_4x5.pdf"
+}

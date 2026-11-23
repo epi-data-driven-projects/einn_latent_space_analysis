@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1890" height="3199" viewBox="0 0 1890 3199">
+<rect width="100%" height="100%" fill="#fafbfe"/>
+<text x="50" y="62" style="font:700 31px sans-serif;fill:#14213d">EINN – projektstruktúra</text>
+<text x="50" y="99" style="font:16px sans-serif;fill:#55657b">einn_latent_space_analysis · könyvtárak és fájlok · vektoros nézet</text>
+<rect x="36" y="124" width="879" height="3048" rx="16" fill="white" stroke="#d8e0eb" stroke-width="1.5"/>
+<rect x="58" y="134" width="829" height="39" rx="8" fill="#e8f0ff"/>
+<text x="71" y="161" style="font:700 22px sans-serif;fill:#1d4696">einn/</text>
+<text x="72" y="196" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── config/</text>
+<text x="72" y="225" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="254" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── config.json</text>
+<text x="72" y="283" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_model_config.py</text>
+<text x="72" y="312" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── einn_train_config.py</text>
+<text x="72" y="341" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── data/</text>
+<text x="72" y="370" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="399" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── data_preprocessor.py</text>
+<text x="72" y="428" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── data_scaling_stats.py</text>
+<text x="72" y="457" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_dataset.py</text>
+<text x="72" y="486" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_input_loader.py</text>
+<text x="72" y="515" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_input_loader_1.py</text>
+<text x="72" y="544" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── expanding_window_loader.py</text>
+<text x="72" y="573" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── ode_solution_generator.py</text>
+<text x="72" y="602" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── ode_solution_generator_1.py</text>
+<text x="72" y="631" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── synthetic_data_generator.py</text>
+<text x="72" y="660" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── inference/</text>
+<text x="72" y="689" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="718" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_evaluator.py</text>
+<text x="72" y="747" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── inference_engine.py</text>
+<text x="72" y="776" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── training_post_processor.py</text>
+<text x="72" y="805" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── loss/</text>
+<text x="72" y="834" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="863" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── einn_loss.py</text>
+<text x="72" y="892" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── model/</text>
+<text x="72" y="921" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">│   ├── interface/</text>
+<text x="72" y="950" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── __init__.py</text>
+<text x="72" y="979" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── einn_models.py</text>
+<text x="72" y="1008" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── network_outputs.py</text>
+<text x="72" y="1037" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── ode_solution.py</text>
+<text x="72" y="1066" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── phase_context.py</text>
+<text x="72" y="1095" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   └── training_metrics.py</text>
+<text x="72" y="1124" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="1153" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── base_neural_network.py</text>
+<text x="72" y="1182" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_builder.py</text>
+<text x="72" y="1211" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── feature_module.py</text>
+<text x="72" y="1240" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── feature_module_decoder.py</text>
+<text x="72" y="1269" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── feature_module_encoder.py</text>
+<text x="72" y="1298" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── output_module.py</text>
+<text x="72" y="1327" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── time_module.py</text>
+<text x="72" y="1356" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── ode/</text>
+<text x="72" y="1385" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="1414" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── base_ode_model.py</text>
+<text x="72" y="1443" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── rost_model.py</text>
+<text x="72" y="1472" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── seir_model.py</text>
+<text x="72" y="1501" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── seirm_model.py</text>
+<text x="72" y="1530" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── sir_model.py</text>
+<text x="72" y="1559" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── sis_model.py</text>
+<text x="72" y="1588" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── tests/</text>
+<text x="72" y="1617" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="1646" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── mask_test.py</text>
+<text x="72" y="1675" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_einn_builder.py</text>
+<text x="72" y="1704" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_einn_dataset.py</text>
+<text x="72" y="1733" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_einn_forward_engine.py</text>
+<text x="72" y="1762" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_einn_loss.py</text>
+<text x="72" y="1791" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_einn_trainer.py</text>
+<text x="72" y="1820" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_inference_engine.py</text>
+<text x="72" y="1849" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_model_shapes.py</text>
+<text x="72" y="1878" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_ode_models.py</text>
+<text x="72" y="1907" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_ode_solution_generator.py</text>
+<text x="72" y="1936" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── test_phase_optimizers.py</text>
+<text x="72" y="1965" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── test_synthetic_data_generator.py</text>
+<text x="72" y="1994" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── training/</text>
+<text x="72" y="2023" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">│   ├── phase_optimizers/</text>
+<text x="72" y="2052" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── __init__.py</text>
+<text x="72" y="2081" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── phase_1_optimizer.py</text>
+<text x="72" y="2110" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── phase_2_optimizer.py</text>
+<text x="72" y="2139" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── phase_3_optimizer.py</text>
+<text x="72" y="2168" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   └── phase_4_optimizer.py</text>
+<text x="72" y="2197" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="72" y="2226" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── base_phase_optimizer.py</text>
+<text x="72" y="2255" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── early_stopping.py</text>
+<text x="72" y="2284" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_forward_engine.py</text>
+<text x="72" y="2313" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── einn_trainer.py</text>
+<text x="72" y="2342" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── utils/</text>
+<text x="72" y="2371" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── experiment_utils.py</text>
+<text x="72" y="2400" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">└── __init__.py</text>
+<rect x="58" y="2429" width="829" height="39" rx="8" fill="#e8f0ff"/>
+<text x="71" y="2456" style="font:700 22px sans-serif;fill:#1d4696">.github/</text>
+<text x="72" y="2491" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">└── workflows/</text>
+<text x="72" y="2520" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    └── pytest.yaml</text>
+<rect x="58" y="2549" width="829" height="39" rx="8" fill="#e8f0ff"/>
+<text x="71" y="2576" style="font:700 22px sans-serif;fill:#1d4696">modulstruktura/</text>
+<text x="72" y="2611" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">└── projekt_fajllista.txt</text>
+<rect x="931" y="124" width="879" height="3048" rx="16" fill="white" stroke="#d8e0eb" stroke-width="1.5"/>
+<rect x="953" y="134" width="829" height="39" rx="8" fill="#e8f0ff"/>
+<text x="966" y="161" style="font:700 22px sans-serif;fill:#1d4696">einn_multimodel/</text>
+<text x="967" y="196" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── config/</text>
+<text x="967" y="225" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="967" y="254" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_model_config.py</text>
+<text x="967" y="283" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── einn_train_config.py</text>
+<text x="967" y="312" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── data/</text>
+<text x="967" y="341" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="967" y="370" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── expanding_window_loader.py</text>
+<text x="967" y="399" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── model_balanced_batch_sampler.py</text>
+<text x="967" y="428" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── multi_model_input_loader.py</text>
+<text x="967" y="457" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── inference/</text>
+<text x="967" y="486" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="967" y="515" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_evaluator.py</text>
+<text x="967" y="544" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── inference_engine.py</text>
+<text x="967" y="573" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── training_post_processor.py</text>
+<text x="967" y="602" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── loss/</text>
+<text x="967" y="631" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="967" y="660" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_loss.py</text>
+<text x="967" y="689" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── supcon_loss.py</text>
+<text x="967" y="718" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── model/</text>
+<text x="967" y="747" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">│   ├── interface/</text>
+<text x="967" y="776" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── __init__.py</text>
+<text x="967" y="805" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── einn_models.py</text>
+<text x="967" y="834" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── feature_module_outputs.py</text>
+<text x="967" y="863" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── network_outputs.py</text>
+<text x="967" y="892" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   └── phase_context.py</text>
+<text x="967" y="921" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="967" y="950" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_builder.py</text>
+<text x="967" y="979" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── feature_module.py</text>
+<text x="967" y="1008" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── feature_module_encoder.py</text>
+<text x="967" y="1037" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── model_labels.py</text>
+<text x="967" y="1066" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── ode/</text>
+<text x="967" y="1095" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="967" y="1124" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── sir_seir_compatible_model.py</text>
+<text x="967" y="1153" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── sis_model.py</text>
+<text x="967" y="1182" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">├── training/</text>
+<text x="967" y="1211" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">│   ├── phase_optimizers/</text>
+<text x="967" y="1240" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── __init__.py</text>
+<text x="967" y="1269" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── phase_1_optimizer.py</text>
+<text x="967" y="1298" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── phase_2_optimizer.py</text>
+<text x="967" y="1327" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   ├── phase_3_optimizer.py</text>
+<text x="967" y="1356" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   │   └── phase_4_optimizer.py</text>
+<text x="967" y="1385" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── __init__.py</text>
+<text x="967" y="1414" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── base_phase_optimizer.py</text>
+<text x="967" y="1443" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   ├── einn_forward_engine.py</text>
+<text x="967" y="1472" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">│   └── einn_trainer.py</text>
+<text x="967" y="1501" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">└── __init__.py</text>
+<rect x="953" y="1530" width="829" height="39" rx="8" fill="#e8f0ff"/>
+<text x="966" y="1557" style="font:700 22px sans-serif;fill:#1d4696">experiment_results/</text>
+<text x="967" y="1592" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">└── generalization/</text>
+<text x="967" y="1621" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    ├── rost/</text>
+<text x="967" y="1650" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   ├── data_cache/</text>
+<text x="967" y="1679" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   │   └── 47f853cc0578/</text>
+<text x="967" y="1708" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │   │       └── cache_configuration.json</text>
+<text x="967" y="1737" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   ├── de_20/</text>
+<text x="967" y="1766" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │   │   └── experiment_config.json</text>
+<text x="967" y="1795" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   └── de_5/</text>
+<text x="967" y="1824" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │       └── experiment_config.json</text>
+<text x="967" y="1853" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    ├── sir/</text>
+<text x="967" y="1882" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   ├── data_cache/</text>
+<text x="967" y="1911" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   │   └── 7125236f7569/</text>
+<text x="967" y="1940" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │   │       └── cache_configuration.json</text>
+<text x="967" y="1969" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   ├── de_20/</text>
+<text x="967" y="1998" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │   │   └── experiment_config.json</text>
+<text x="967" y="2027" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   └── de_5/</text>
+<text x="967" y="2056" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │       └── experiment_config.json</text>
+<text x="967" y="2085" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    ├── sis/</text>
+<text x="967" y="2114" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   ├── data_cache/</text>
+<text x="967" y="2143" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   │   └── 88a92ae388f7/</text>
+<text x="967" y="2172" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │   │       └── cache_configuration.json</text>
+<text x="967" y="2201" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   ├── de_20/</text>
+<text x="967" y="2230" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │   │   └── experiment_config.json</text>
+<text x="967" y="2259" xml:space="preserve" style="font:600 18px monospace;fill:#1e5aaa">    │   └── de_5/</text>
+<text x="967" y="2288" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    │       └── experiment_config.json</text>
+<text x="967" y="2317" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">    └── all_runs_summary.json</text>
+<rect x="953" y="2346" width="829" height="39" rx="8" fill="#e8f0ff"/>
+<text x="966" y="2373" style="font:700 22px sans-serif;fill:#1d4696">Gyökérfájlok / entry pointok</text>
+<text x="967" y="2408" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── .gitignore</text>
+<text x="967" y="2437" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── debug_aux.py</text>
+<text x="967" y="2466" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── Dockerfile</text>
+<text x="967" y="2495" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── einn_abrak_ujrarajzolasa_4x4.py</text>
+<text x="967" y="2524" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── einn_runner.py</text>
+<text x="967" y="2553" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── entrypoint_class_moves.md</text>
+<text x="967" y="2582" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── EXP_OSSZ.PY</text>
+<text x="967" y="2611" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── latent_space_analysis.py</text>
+<text x="967" y="2640" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── LICENSE</text>
+<text x="967" y="2669" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── project_structure.txt</text>
+<text x="967" y="2698" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── README.md</text>
+<text x="967" y="2727" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── requirements.txt</text>
+<text x="967" y="2756" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── ua_inf_ket_sir.py</text>
+<text x="967" y="2785" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── ua_train_ket_sir.py</text>
+<text x="967" y="2814" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── z_from_saved_multimodel.py</text>
+<text x="967" y="2843" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── z_uj_multimodel_abrak.py</text>
+<text x="967" y="2872" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── zzz_kihagyloss.py</text>
+<text x="967" y="2901" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── zzz_vegleges_.py</text>
+<text x="967" y="2930" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">├── zzzz_elorol.py</text>
+<text x="967" y="2959" xml:space="preserve" style="font:400 18px monospace;fill:#2d3748">└── zzzzzz_model_arch.py</text>
+</svg>

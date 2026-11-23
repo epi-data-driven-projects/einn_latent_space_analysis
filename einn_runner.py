@@ -73,6 +73,7 @@ class EINNRunner:
             model_config=self.model_cfg,
             train_config=self.train_cfg,
             param_calibration=param_calibration,
+            target_idx=target_idx,
             model_type=model_type,
             seed=self.seed
         )

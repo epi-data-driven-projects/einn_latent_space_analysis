@@ -1,0 +1,2 @@
+normalize_feature_embeddings,condition_feature_on_true_label,embedding_dim,output_dir
+False,True,20,./outputs/sir_sis_generalization_4x4/label_conditioned/raw/de_20

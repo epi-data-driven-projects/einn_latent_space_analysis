@@ -1,0 +1,140 @@
+PROJECT: /mnt/raid/home/zsvizi/einn_latent_space_analysis
+
+FAJLFA:
+.gitignore
+debug_aux.py
+einn_abrak_ujrarajzolasa_4x4.py
+einn_runner.py
+EXP_OSSZ.PY
+latent_space_analysis.py
+LICENSE
+README.md
+requirements.txt
+ua_inf_ket_sir.py
+ua_train_ket_sir.py
+z_from_saved_multimodel.py
+z_uj_multimodel_abrak.py
+zzz_kihagyloss.py
+zzz_vegleges_.py
+zzzz_elorol.py
+    einn/__init__.py
+    einn_multimodel/__init__.py
+        einn/config/__init__.py
+        einn/config/config.json
+        einn/config/einn_model_config.py
+        einn/config/einn_train_config.py
+        einn/data/__init__.py
+        einn/data/data_preprocessor.py
+        einn/data/data_scaling_stats.py
+        einn/data/einn_dataset.py
+        einn/data/einn_input_loader.py
+        einn/data/einn_input_loader_1.py
+        einn/data/expanding_window_loader.py
+        einn/data/ode_solution_generator.py
+        einn/data/ode_solution_generator_1.py
+        einn/data/synthetic_data_generator.py
+        einn/inference/__init__.py
+        einn/inference/einn_evaluator.py
+        einn/inference/inference_engine.py
+        einn/inference/training_post_processor.py
+        einn/loss/__init__.py
+        einn/loss/einn_loss.py
+        einn/model/__init__.py
+        einn/model/base_neural_network.py
+        einn/model/einn_builder.py
+        einn/model/feature_module.py
+        einn/model/feature_module_decoder.py
+        einn/model/feature_module_encoder.py
+        einn/model/output_module.py
+        einn/model/time_module.py
+        einn/ode/__init__.py
+        einn/ode/base_ode_model.py
+        einn/ode/rost_model.py
+        einn/ode/seir_model.py
+        einn/ode/seirm_model.py
+        einn/ode/sir_model.py
+        einn/ode/sis_model.py
+        einn/tests/__init__.py
+        einn/tests/mask_test.py
+        einn/tests/test_einn_builder.py
+        einn/tests/test_einn_dataset.py
+        einn/tests/test_einn_forward_engine.py
+        einn/tests/test_einn_loss.py
+        einn/tests/test_einn_trainer.py
+        einn/tests/test_inference_engine.py
+        einn/tests/test_model_shapes.py
+        einn/tests/test_ode_models.py
+        einn/tests/test_ode_solution_generator.py
+        einn/tests/test_phase_optimizers.py
+        einn/tests/test_synthetic_data_generator.py
+        einn/training/__init__.py
+        einn/training/base_phase_optimizer.py
+        einn/training/early_stopping.py
+        einn/training/einn_forward_engine.py
+        einn/training/einn_trainer.py
+        einn/utils/experiment_utils.py
+        einn_multimodel/config/__init__.py
+        einn_multimodel/config/einn_model_config.py
+        einn_multimodel/config/einn_train_config.py
+        einn_multimodel/data/__init__.py
+        einn_multimodel/data/expanding_window_loader.py
+        einn_multimodel/data/model_balanced_batch_sampler.py
+        einn_multimodel/data/multi_model_input_loader.py
+        einn_multimodel/inference/__init__.py
+        einn_multimodel/inference/einn_evaluator.py
+        einn_multimodel/inference/inference_engine.py
+        einn_multimodel/inference/training_post_processor.py
+        einn_multimodel/loss/__init__.py
+        einn_multimodel/loss/einn_loss.py
+        einn_multimodel/loss/supcon_loss.py
+        einn_multimodel/model/__init__.py
+        einn_multimodel/model/einn_builder.py
+        einn_multimodel/model/feature_module.py
+        einn_multimodel/model/feature_module_encoder.py
+        einn_multimodel/model/model_labels.py
+        einn_multimodel/ode/__init__.py
+        einn_multimodel/ode/sir_seir_compatible_model.py
+        einn_multimodel/ode/sis_model.py
+        einn_multimodel/training/__init__.py
+        einn_multimodel/training/base_phase_optimizer.py
+        einn_multimodel/training/einn_forward_engine.py
+        einn_multimodel/training/einn_trainer.py
+        experiment_results/generalization/all_runs_summary.json
+            einn/model/interface/__init__.py
+            einn/model/interface/einn_models.py
+            einn/model/interface/network_outputs.py
+            einn/model/interface/ode_solution.py
+            einn/model/interface/phase_context.py
+            einn/model/interface/training_metrics.py
+            einn/training/phase_optimizers/__init__.py
+            einn/training/phase_optimizers/phase_1_optimizer.py
+            einn/training/phase_optimizers/phase_2_optimizer.py
+            einn/training/phase_optimizers/phase_3_optimizer.py
+            einn/training/phase_optimizers/phase_4_optimizer.py
+            einn_multimodel/model/interface/__init__.py
+            einn_multimodel/model/interface/einn_models.py
+            einn_multimodel/model/interface/feature_module_outputs.py
+            einn_multimodel/model/interface/network_outputs.py
+            einn_multimodel/model/interface/phase_context.py
+            einn_multimodel/training/phase_optimizers/__init__.py
+            einn_multimodel/training/phase_optimizers/phase_1_optimizer.py
+            einn_multimodel/training/phase_optimizers/phase_2_optimizer.py
+            einn_multimodel/training/phase_optimizers/phase_3_optimizer.py
+            einn_multimodel/training/phase_optimizers/phase_4_optimizer.py
+                experiment_results/generalization/rost/de_20/experiment_config.json
+                experiment_results/generalization/rost/de_5/experiment_config.json
+                experiment_results/generalization/sir/de_20/experiment_config.json
+                experiment_results/generalization/sir/de_5/experiment_config.json
+                experiment_results/generalization/sis/de_20/experiment_config.json
+                experiment_results/generalization/sis/de_5/experiment_config.json
+                    experiment_results/generalization/rost/data_cache/47f853cc0578/cache_configuration.json
+                    experiment_results/generalization/sir/data_cache/7125236f7569/cache_configuration.json
+                    experiment_results/generalization/sis/data_cache/88a92ae388f7/cache_configuration.json
+
+TERVEZETT OSZTALY-KIEMELESEK:
+einn_abrak_ujrarajzolasa_4x4.py :: Experiment  -->  einn_multimodel/utils/experiment.py
+z_uj_multimodel_abrak.py :: FeatureOnlyEvaluator  -->  einn_multimodel/inference/feature_only_evaluator.py
+zzz_kihagyloss.py :: FeatureOnlyEvaluator  -->  einn_multimodel/inference/feature_only_evaluator.py
+zzz_vegleges_.py :: FeatureOnlyEvaluator  -->  einn_multimodel/inference/feature_only_evaluator.py
+zzzz_elorol.py :: FeatureOnlyEvaluator  -->  einn_multimodel/inference/feature_only_evaluator.py
+einn/tests/mask_test.py :: FeatureModuleEncoderTest  -->  einn_multimodel/model/feature_module_encoder_test.py

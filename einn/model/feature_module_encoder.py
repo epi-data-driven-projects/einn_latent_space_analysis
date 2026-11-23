@@ -65,10 +65,16 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
         # latent_seqs shape: [Batch, Seq_len, rnn_out]
         latent_seqs, _ = self.enc_rnn(input=x)
 
+        key_padding_mask = None
+
+        if mask is not None:
+            key_padding_mask = mask.bool()
+
         latent_seqs, _ = self.attn_layer(
             query=latent_seqs,
             key=latent_seqs,
-            value=latent_seqs
+            value=latent_seqs,
+            key_padding_mask=key_padding_mask
         )
 
         if mask is not None:

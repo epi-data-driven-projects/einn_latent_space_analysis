@@ -1,0 +1,8 @@
+=== HELD-OUT FEATURE EMBEDDING GEOMETRY ===
+PCA variance PC1: 0.39987590
+PCA variance PC2: 0.22541794
+Feature embedding normalization: False
+Mean embedding norm: 3.917183
+Held-out trajectories: 40
+Silhouette (original d_e): 0.254792
+Temporal points of the same trajectory are NOT independent samples.

@@ -1,0 +1,2 @@
+mean_embedding_norm,silhouette_test,davies_bouldin_test,hausdorff,hausdorff_p95,hausdorff_unit,heldout_future_mse,normalize_feature_embeddings,condition_feature_on_true_label
+2.117492914199829,0.8505074381828308,0.2421619183934449,2.762864773098844,2.551743279524169,1.3878783390922937,0.009035293010071738,False,True

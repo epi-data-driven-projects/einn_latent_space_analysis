@@ -1,0 +1,2 @@
+model_a,model_b,d_e,silhouette_score,pc1_variance,pc2_variance,n_test_points,n_trajectories_a,n_trajectories_b
+SIR,SEIR,20,0.18330741827439453,0.5030400930073521,0.24260225821321998,8000,20,20

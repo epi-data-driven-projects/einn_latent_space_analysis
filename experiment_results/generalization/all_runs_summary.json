@@ -1,0 +1,52 @@
+{
+  "runs": [
+    {
+      "model": "SIR",
+      "embedding_dim": 20,
+      "status": "sikeres",
+      "output_dir": "/mnt/raid/home/zsvizi/einn_latent_space_analysis/experiment_results/generalization/sir/de_20",
+      "mean_future_mse": 0.0016178871288493964,
+      "mean_pca_d95": 3.0
+    },
+    {
+      "model": "SIR",
+      "embedding_dim": 5,
+      "status": "sikeres",
+      "output_dir": "/mnt/raid/home/zsvizi/einn_latent_space_analysis/experiment_results/generalization/sir/de_5",
+      "mean_future_mse": 0.0005458292325129773,
+      "mean_pca_d95": 2.0
+    },
+    {
+      "model": "SIS",
+      "embedding_dim": 20,
+      "status": "sikeres",
+      "output_dir": "/mnt/raid/home/zsvizi/einn_latent_space_analysis/experiment_results/generalization/sis/de_20",
+      "mean_future_mse": 0.019958317123807825,
+      "mean_pca_d95": 2.0
+    },
+    {
+      "model": "SIS",
+      "embedding_dim": 5,
+      "status": "sikeres",
+      "output_dir": "/mnt/raid/home/zsvizi/einn_latent_space_analysis/experiment_results/generalization/sis/de_5",
+      "mean_future_mse": 0.02149868970425249,
+      "mean_pca_d95": 1.0
+    },
+    {
+      "model": "ROST",
+      "embedding_dim": 20,
+      "status": "sikeres",
+      "output_dir": "/mnt/raid/home/zsvizi/einn_latent_space_analysis/experiment_results/generalization/rost/de_20",
+      "mean_future_mse": 0.0038557082848956047,
+      "mean_pca_d95": 5.0
+    },
+    {
+      "model": "ROST",
+      "embedding_dim": 5,
+      "status": "sikeres",
+      "output_dir": "/mnt/raid/home/zsvizi/einn_latent_space_analysis/experiment_results/generalization/rost/de_5",
+      "mean_future_mse": 0.006619925189602363,
+      "mean_pca_d95": 3.0
+    }
+  ]
+}

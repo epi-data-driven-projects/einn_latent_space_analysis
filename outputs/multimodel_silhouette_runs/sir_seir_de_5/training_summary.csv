@@ -1,0 +1,2 @@
+mean_embedding_norm,silhouette_test,heldout_future_mse,normalize_feature_embeddings,condition_feature_on_true_label
+1.9996406292650963,0.5058100990938809,0.00038291152712397424,False,True

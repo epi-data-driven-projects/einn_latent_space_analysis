@@ -1,0 +1,172 @@
+einn_latent_space_analysis/
+  ├── einn/
+  │   ├── config/
+  │   │   ├── config.json
+  │   │   ├── einn_model_config.py
+  │   │   └── einn_train_config.py
+  │   ├── data/
+  │   │   ├── data_preprocessor.py
+  │   │   ├── data_scaling_stats.py
+  │   │   ├── einn_dataset.py
+  │   │   ├── einn_input_loader.py
+  │   │   ├── expanding_window_loader.py
+  │   │   └── synthetic_data_generator.py
+  │   ├── inference/
+  │   │   ├── einn_evaluator.py
+  │   │   ├── inference_engine.py
+  │   │   └── training_post_processor.py
+  │   ├── loss/
+  │   │   └── einn_loss.py
+  │   ├── model/
+  │   │   ├── interface/
+  │   │   │   ├── einn_models.py
+  │   │   │   ├── network_outputs.py
+  │   │   │   ├── ode_solution.py
+  │   │   │   ├── phase_context.py
+  │   │   │   └── training_metrics.py
+  │   │   ├── base_neural_network.py
+  │   │   ├── einn_builder.py
+  │   │   ├── feature_module.py
+  │   │   ├── feature_module_decoder.py
+  │   │   ├── feature_module_encoder.py
+  │   │   ├── output_module.py
+  │   │   └── time_module.py
+  │   ├── ode/
+  │   │   ├── base_ode_model.py
+  │   │   ├── rost_model.py
+  │   │   ├── seir_model.py
+  │   │   ├── seirm_model.py
+  │   │   ├── sir_model.py
+  │   │   └── sis_model.py
+  │   ├── training/
+  │   │   ├── phase_optimizers/
+  │   │   │   ├── phase_1_optimizer.py
+  │   │   │   ├── phase_2_optimizer.py
+  │   │   │   ├── phase_3_optimizer.py
+  │   │   │   └── phase_4_optimizer.py
+  │   │   ├── base_phase_optimizer.py
+  │   │   ├── early_stopping.py
+  │   │   ├── einn_forward_engine.py
+  │   │   └── einn_trainer.py
+  │   ├── utils/
+  │   │   └── experiment_utils.py
+  ├── einn_multimodel/
+  │   ├── config/
+  │   │   ├── einn_model_config.py
+  │   │   └── einn_train_config.py
+  │   ├── data/
+  │   │   ├── expanding_window_loader.py
+  │   │   ├── model_balanced_batch_sampler.py
+  │   │   └── multi_model_input_loader.py
+  │   ├── inference/
+  │   │   ├── einn_evaluator.py
+  │   │   ├── inference_engine.py
+  │   │   └── training_post_processor.py
+  │   ├── loss/
+  │   │   ├── einn_loss.py
+  │   │   └── supcon_loss.py
+  │   ├── model/
+  │   │   ├── interface/
+  │   │   │   ├── einn_models.py
+  │   │   │   ├── feature_module_outputs.py
+  │   │   │   ├── network_outputs.py
+  │   │   │   └── phase_context.py
+  │   │   ├── einn_builder.py
+  │   │   ├── feature_module.py
+  │   │   ├── feature_module_encoder.py
+  │   │   └── model_labels.py
+  │   ├── ode/
+  │   │   ├── sir_seir_compatible_model.py
+  │   │   └── sis_model.py
+  │   ├── training/
+  │   │   ├── phase_optimizers/
+  │   │   │   ├── phase_1_optimizer.py
+  │   │   │   ├── phase_2_optimizer.py
+  │   │   │   ├── phase_3_optimizer.py
+  │   │   │   └── phase_4_optimizer.py
+  │   │   ├── base_phase_optimizer.py
+  │   │   ├── einn_forward_engine.py
+  │   │   └── einn_trainer.py
+  ├── .gitignore
+  ├── Dockerfile
+  ├── einn_runner.py
+  ├── LICENSE
+  ├── README.md
+  ├── requirements.txt
+
+# Közvetlenül definiált osztályok fájlonként (nem importált osztályok)
+einn_abrak_ujrarajzolasa_4x4.py: Experiment (sor: 72)
+einn_runner.py: EINNRunner (sor: 12)
+z_uj_multimodel_abrak.py: FeatureOnlyEvaluator (sor: 298)
+zzz_kihagyloss.py: FeatureOnlyEvaluator (sor: 93)
+zzz_vegleges_.py: FeatureOnlyEvaluator (sor: 143)
+zzzz_elorol.py: FeatureOnlyEvaluator (sor: 135)
+einn/config/einn_model_config.py: EINNModelConfig (sor: 5)
+einn/config/einn_train_config.py: EINNTrainConfig (sor: 8)
+einn/data/data_preprocessor.py: DataPreprocessor (sor: 10)
+einn/data/data_scaling_stats.py: DataScalingStats (sor: 8)
+einn/data/einn_dataset.py: EINNDataset (sor: 5)
+einn/data/einn_input_loader.py: EINNInputLoader (sor: 12)
+einn/data/einn_input_loader_1.py: EINNInputLoader (sor: 15)
+einn/data/expanding_window_loader.py: ExpandingWindowLoader (sor: 10)
+einn/data/ode_solution_generator.py: ODESolutionGenerator (sor: 13)
+einn/data/ode_solution_generator_1.py: ODESolutionGenerator (sor: 10)
+einn/data/synthetic_data_generator.py: SyntheticDataGenerator (sor: 23)
+einn/inference/einn_evaluator.py: EINNEvaluator (sor: 15)
+einn/inference/inference_engine.py: InferenceEngine (sor: 7)
+einn/inference/training_post_processor.py: TrainingPostProcessor (sor: 11)
+einn/loss/einn_loss.py: EINNLoss (sor: 12)
+einn/model/base_neural_network.py: BaseNeuralNetwork (sor: 5)
+einn/model/einn_builder.py: EINNBuilder (sor: 15)
+einn/model/feature_module.py: FeatureModule (sor: 10)
+einn/model/feature_module_decoder.py: FeatureModuleDecoder (sor: 7)
+einn/model/feature_module_encoder.py: FeatureModuleEncoder (sor: 9)
+einn/model/output_module.py: OutputModule (sor: 7)
+einn/model/time_module.py: TimeModule (sor: 8)
+einn/ode/base_ode_model.py: BaseODEModel (sor: 9)
+einn/ode/rost_model.py: RostHungaryModel (sor: 8)
+einn/ode/seir_model.py: SEIRModel (sor: 8)
+einn/ode/seirm_model.py: SEIRMModel (sor: 8)
+einn/ode/sir_model.py: SIRModel (sor: 8)
+einn/ode/sis_model.py: SISModel (sor: 8)
+einn/tests/mask_test.py: FeatureModuleEncoderTest (sor: 4)
+einn/training/base_phase_optimizer.py: BasePhaseOptimizer (sor: 13)
+einn/training/early_stopping.py: EarlyStopping (sor: 4)
+einn/training/einn_forward_engine.py: EINNForwardEngine (sor: 9)
+einn/training/einn_trainer.py: EINNTrainer (sor: 22)
+einn/utils/experiment_utils.py: ExperimentUtils (sor: 8)
+einn_multimodel/config/einn_model_config.py: EINNModelConfig (sor: 5)
+einn_multimodel/config/einn_train_config.py: EINNTrainConfig (sor: 8)
+einn_multimodel/data/expanding_window_loader.py: ExpandingWindowLoader (sor: 9)
+einn_multimodel/data/model_balanced_batch_sampler.py: ModelBalancedBatchSampler (sor: 10)
+einn_multimodel/data/multi_model_input_loader.py: MultiModelInputLoader (sor: 42)
+einn_multimodel/inference/einn_evaluator.py: EINNEvaluator (sor: 16)
+einn_multimodel/inference/inference_engine.py: InferenceEngine (sor: 9)
+einn_multimodel/inference/training_post_processor.py: TrainingPostProcessor (sor: 11)
+einn_multimodel/loss/einn_loss.py: EINNLoss (sor: 14)
+einn_multimodel/loss/supcon_loss.py: SupConLoss (sor: 8)
+einn_multimodel/model/einn_builder.py: EINNBuilder (sor: 19)
+einn_multimodel/model/feature_module.py: FeatureModule (sor: 12)
+einn_multimodel/model/feature_module_encoder.py: FeatureModuleEncoder (sor: 11)
+einn_multimodel/ode/sir_seir_compatible_model.py: SIRSEIRCompatibleModel (sor: 10)
+einn_multimodel/ode/sis_model.py: SISModel (sor: 10)
+einn_multimodel/training/base_phase_optimizer.py: BasePhaseOptimizer (sor: 13)
+einn_multimodel/training/einn_forward_engine.py: EINNForwardEngine (sor: 9)
+einn_multimodel/training/einn_trainer.py: EINNTrainer (sor: 25)
+einn/model/interface/einn_models.py: EINNModels (sor: 10)
+einn/model/interface/network_outputs.py: NetworkOutputs (sor: 8)
+einn/model/interface/ode_solution.py: ODESolution (sor: 8)
+einn/model/interface/phase_context.py: PhaseContext (sor: 8)
+einn/model/interface/training_metrics.py: TrainingMetrics (sor: 6)
+einn/training/phase_optimizers/phase_1_optimizer.py: Phase1Optimizer (sor: 8)
+einn/training/phase_optimizers/phase_2_optimizer.py: Phase2Optimizer (sor: 8)
+einn/training/phase_optimizers/phase_3_optimizer.py: Phase3Optimizer (sor: 8)
+einn/training/phase_optimizers/phase_4_optimizer.py: Phase4Optimizer (sor: 8)
+einn_multimodel/model/interface/einn_models.py: EINNModels (sor: 12)
+einn_multimodel/model/interface/feature_module_outputs.py: FeatureModuleOutputs (sor: 7)
+einn_multimodel/model/interface/network_outputs.py: NetworkOutputs (sor: 8)
+einn_multimodel/model/interface/phase_context.py: PhaseContext (sor: 9)
+einn_multimodel/training/phase_optimizers/phase_1_optimizer.py: Phase1Optimizer (sor: 8)
+einn_multimodel/training/phase_optimizers/phase_2_optimizer.py: Phase2Optimizer (sor: 8)
+einn_multimodel/training/phase_optimizers/phase_3_optimizer.py: Phase3Optimizer (sor: 8)
+einn_multimodel/training/phase_optimizers/phase_4_optimizer.py: Phase4Optimizer (sor: 8)

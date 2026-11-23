@@ -1,0 +1,3 @@
+Held-out future MSE in PHYSICAL units, prefix=80: 8.30981398e-05
+True=SEIR: 2.6350171e-05
+True=SIR: 0.000139846109

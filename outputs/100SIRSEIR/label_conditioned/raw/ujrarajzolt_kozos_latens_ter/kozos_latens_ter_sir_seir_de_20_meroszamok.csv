@@ -1,0 +1,2 @@
+model_a,model_b,d_e,hausdorff,hausdorff_p95,relative_hausdorff,relative_hausdorff_std,relative_hausdorff_p95,relative_hausdorff_p95_std,mean_within_hausdorff,mean_within_hausdorff_p95,n_splits,split_seed,pc1_variance,pc2_variance,n_test_points,n_trajectories_a,n_trajectories_b
+SIR,SEIR,20,4.4758968586902235,4.362621744711602,7.286685870597552,1.2774561634108395,19.637654675690843,2.68153123919033,0.6359020344407382,0.22679785391151877,50,42,0.5030400930073521,0.24260225821321998,8000,20,20

@@ -1,0 +1,7 @@
+jelenlegi_entry_point,osztaly,javasolt_celfajl,celfajl_mar_letezik
+einn_abrak_ujrarajzolasa_4x4.py,Experiment,einn_multimodel/utils/experiment.py,False
+z_uj_multimodel_abrak.py,FeatureOnlyEvaluator,einn_multimodel/inference/feature_only_evaluator.py,False
+zzz_kihagyloss.py,FeatureOnlyEvaluator,einn_multimodel/inference/feature_only_evaluator.py,False
+zzz_vegleges_.py,FeatureOnlyEvaluator,einn_multimodel/inference/feature_only_evaluator.py,False
+zzzz_elorol.py,FeatureOnlyEvaluator,einn_multimodel/inference/feature_only_evaluator.py,False
+einn/tests/mask_test.py,FeatureModuleEncoderTest,einn_multimodel/model/feature_module_encoder_test.py,False

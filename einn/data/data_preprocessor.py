@@ -38,18 +38,12 @@ class DataPreprocessor:
         y_raw: np.ndarray, 
         aux_raw: np.ndarray, 
         target_idx: int,
-        initial_states: List[float]
+        initial_states: List[float],
+        time_length: int  # <-- JAVÍTÁS: Hozzáadva a time_length paraméter
     ) -> Tuple[Dict[str, torch.Tensor], DataScalingStats]:
         """
         Scales the raw data matrices, anchors the pre-calibrated auxiliary structural data,
         and constructs the exact statistical dataclass required by the trainer.
-
-        :param np.ndarray x_raw: The historical exogenous features. Shape: [Seq_len, d_x].
-        :param np.ndarray y_raw: The ground truth target observations. Shape: [Seq_len, 1].
-        :param np.ndarray aux_raw: The pre-calibrated baseline structural curves from the ODE. Shape: [Seq_len, d_s].
-        :param int target_idx: The index of the targeted compartment (e.g., 4 for M).
-        :param List[float] initial_states: The physical, unscaled initial compartment fractions at t=0.
-        :return Tuple[Dict[str, torch.Tensor], DataScalingStats]: The scaled data dictionary and the runtime statistics.
         """
         # Overwrite the targeted compartment in the auxiliary data with the real-world incidence data
         aux_raw_modified = aux_raw.copy()
@@ -66,10 +60,12 @@ class DataPreprocessor:
         self.y_mean = torch.tensor(self.y_scaler.mean_, dtype=torch.float32)
         self.y_std = torch.tensor(self.y_scaler.scale_ + 1e-8, dtype=torch.float32)
 
-        # Extract time bounds for internal Min-Max scaling in the engine
+        # JAVÍTÁS: A time_length alapján rögzítjük a t_min és t_max értékeket
+        # Így garantált, hogy a t_max 199 marad, és nem ugrik fel 3999-re a fűzött adat miatt!
+        self.t_min = torch.tensor(0.0, dtype=torch.float32)
+        self.t_max = torch.tensor(float(time_length - 1), dtype=torch.float32)
+
         t_unscaled = np.arange(len(x_raw)).reshape(-1, 1)
-        self.t_min = torch.tensor(float(t_unscaled.min()), dtype=torch.float32)
-        self.t_max = torch.tensor(float(t_unscaled.max()), dtype=torch.float32)
 
         # Normalize the initial states using the computed auxiliary statistics
         ic_physical = torch.tensor(initial_states, dtype=torch.float32)
