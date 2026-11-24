@@ -34,7 +34,7 @@ The code supports investigations of:
 - **Generalization:** how predictions and embeddings change when the observed prefix is shorter than the full simulated trajectory.
 - **Model discrimination:** whether embeddings associated with different compartmental models can be distinguished using supervised contrastive learning.
 
-The evaluation includes principal component analysis (PCA), cosine similarity, Procrustes alignment, and—in the multi-model setting—cluster-separation metrics and Hausdorff-type distances.
+The evaluation includes principal component analysis (PCA), cosine similarity, Procrustes alignment, and—in the multi-model setting-cluster-separation metrics.
 
 ## Architecture and methodology
 
