@@ -59,8 +59,10 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
         """
         Encodes the input sequence into a fixed-size context vector.
+
         :param torch.Tensor x: Input sequence. Shape: [Batch, Seq_len, dim_seq_in].
         :param torch.Tensor mask: Optional mask tensor. Shape: [Batch, Seq_len].
+
         :return torch.Tensor: Context vector (h). Shape: [Batch, rnn_out].
         """
         # latent_seqs shape: [Batch, Seq_len, rnn_out]

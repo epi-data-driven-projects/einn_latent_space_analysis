@@ -6,11 +6,11 @@ class EINNDataset(Dataset):
     """
     PyTorch Dataset for EINN. Supports both full-sequence training and a sliding window approach for dynamic batching.
     """
-
     def __init__(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor,
                  aux_targets: torch.Tensor, window_size: int | None = None,
                  device: str = 'cpu'):
-        """Initializes the dataset, detaches tensors from the computation graph, and moves them to the target device.
+        """
+        Initializes the dataset, detaches tensors from the computation graph, and moves them to the target device.
 
         :param torch.Tensor x: the observed inputs. Expected shape: [Seq_len, d_x] or [1, Seq_len, d_x].
         :param torch.Tensor y : the target variable
@@ -44,7 +44,8 @@ class EINNDataset(Dataset):
                              f"strictly larger than the sequence length ({self.seq_len}).")
 
     def _prepare_data(self, x: torch.Tensor, y: torch.Tensor, t: torch.Tensor, aux_targets: torch.Tensor):
-        """Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
+        """
+        Formats, detaches from the computation graph, and moves the input tensors to the target device (GPU/CPU).
 
         :param torch.Tensor x: Observed input features with shape [time, features], optionally batched.
         :param torch.Tensor y: Target-compartment observations aligned with the input time axis.

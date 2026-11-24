@@ -30,8 +30,6 @@ class RostHungaryModel(BaseODEModel):
         """Initializes all 14 raw learnable parameters using inverse tanh scaling.
 
         :param dict param_dict: Dictionary containing initial biological values for the parameters.
-
-        :return Any: The computed objects, metrics, or artifact paths for the requested operation.
         """
         p_keys = [
             "beta", "inf_a", "susc", "alpha_l", "alpha_p", "p", "gamma_a",
@@ -103,6 +101,7 @@ class RostHungaryModel(BaseODEModel):
 
         :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, 18].
         :param bool detach_params: If True, detaches the parameters from the PyTorch computation graph.
+
         :return ODESolution: A dataclass holding the computed derivatives (ds_dt) and the scaled parameters.
         """
         params = self.get_scaled_params(detach=detach_params)

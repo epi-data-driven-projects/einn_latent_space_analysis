@@ -26,12 +26,13 @@ class EINNTrainer:
     """
 
     def __init__(self, models: EINNModels, config: EINNTrainConfig, scaling_stats: DataScalingStats):
-        """Initializes the trainer, the forward engine, the loss calculator, and all 4 independent phase optimizers.
+        """
+        Initializes the trainer, the forward engine, the loss calculator, and all 4 independent phase optimizers.
 
         :param EINNModels models: The container holding all initialized neural networks and the ODE model.
         :param EINNTrainConfig config: The training configuration object containing hyperparameters.
-
         :param DataScalingStats scaling_stats: Statistics fitted on training data for physical-domain conversion.
+
         :return None: No return value; state or serialized artifacts are updated in place.
         """
         self.models = models
@@ -59,6 +60,7 @@ class EINNTrainer:
         :param EINNDataset dataset: The dataset containing observed inputs, targets, and time vectors.
         :param int epochs: Total number of macroscopic training epochs.
         :param int batch_size: Size of the sliding window batches.
+
         :return List[TrainingMetrics]: A chronological list of recorded training metrics.
         """
         all_metrics: List[TrainingMetrics] = []
@@ -75,31 +77,25 @@ class EINNTrainer:
         for epoch in range(1, epochs + 1):
             self.logger.info(f"--- EPOCH {epoch}/{epochs} ---")
 
-            # ====================================================
-            # Read the first two phases repetition count from the original configuration.
-            # ====================================================
             # The Time and Feature pretraining phases run consecutively in each repetition.
             reps_p1_2 = self.config.reps.get('phase_1', 300)
             for rep in range(1, reps_p1_2 + 1):
                 # Execute phase one using only its assigned optimizer and monitored losses.
-                m1 = self._run_single_rep(self.opt_phase1, phase_num=1, rep=rep, total_reps=reps_p1_2, epoch=epoch, dataloader=dataloader)
+                m1 = self._run_single_rep(self.opt_phase1, phase_num=1, rep=rep, total_reps=reps_p1_2, epoch=epoch,
+                                          dataloader=dataloader)
                 all_metrics.append(m1)
 
                 # Execute phase two using only its assigned optimizer and monitored losses.
-                m2 = self._run_single_rep(self.opt_phase2, phase_num=2, rep=rep, total_reps=reps_p1_2, epoch=epoch, dataloader=dataloader)
+                m2 = self._run_single_rep(self.opt_phase2, phase_num=2, rep=rep, total_reps=reps_p1_2, epoch=epoch,
+                                          dataloader=dataloader)
                 all_metrics.append(m2)
 
-            # ====================================================
-            # Read the number of knowledge-distillation repetitions for phase three.
-            # ====================================================
             reps_p3 = self.config.reps.get('phase_3', 300)
             for rep in range(1, reps_p3 + 1):
-                m3 = self._run_single_rep(self.opt_phase3, phase_num=3, rep=rep, total_reps=reps_p3, epoch=epoch, dataloader=dataloader)
+                m3 = self._run_single_rep(self.opt_phase3, phase_num=3, rep=rep, total_reps=reps_p3, epoch=epoch,
+                                          dataloader=dataloader)
                 all_metrics.append(m3)
 
-            # ====================================================
-            # Read the number of final joint training repetitions for phase four.
-            # ====================================================
             reps_p4 = self.config.reps.get('phase_4', 300)
             phase4_metrics = []
             for rep in range(1, reps_p4 + 1):

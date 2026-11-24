@@ -1,79 +1,79 @@
-from einn.visualization.single_generalization_plotter import SingleGeneralizationPlotter
+"""
+Single-model EINN generalization experiment across observation windows and latent dimensions.
 
-"""Single-model EINN generalization: four observation windows, five diagnostics.
-
-Each row uses a different prefix of ONE genuinely new synthetic trajectory.
-The columns are: physical prediction, PCA cumulative explained variance,
-shared-PCA 2D trajectory, paired cosine similarity, and Procrustes residual.
+Trains and evaluates single-model EINNs (SIR, SIS, SEIRM, ROST) across four observed
+prefix lengths (10, 18, 40, 80) on held-out synthetic trajectories, computes forecast
+MSE, paired cosine similarity, Procrustes disparity/residuals, and shared/per-window PCA
+statistics, renders the 4x5 generalization figure, and exports `.npz`, `.csv`, and
+`.json` artifacts with fault-tolerant status tracking.
 
 Run from the project root with: python einn_single_model_generalization_4x5.py
 """
-
+from datetime import datetime
 import gc
 import hashlib
 import json
-import traceback
-from datetime import datetime
 from pathlib import Path
+import traceback
+from typing import Any
 
 import matplotlib
-matplotlib.use("Agg")  # Headless, repeatable saving during batch runs.
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator, PercentFormatter
 import numpy as np
-import torch
 from scipy.spatial import procrustes
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+import torch
 
 from einn.config.einn_model_config import EINNModelConfig
 from einn.config.einn_train_config import EINNTrainConfig
 from einn.data.einn_input_loader import EINNInputLoader
 from einn.data.synthetic_data_generator import SyntheticDataGenerator
-from einn.ode.sir_model import SIRModel
-from einn.ode.sis_model import SISModel
-from einn.ode.seirm_model import SEIRMModel
-from einn.ode.rost_model import RostHungaryModel
 from einn.inference.inference_engine import InferenceEngine
 from einn.model.einn_builder import EINNBuilder
+from einn.ode.rost_model import RostHungaryModel
+from einn.ode.seirm_model import SEIRMModel
+from einn.ode.sir_model import SIRModel
+from einn.ode.sis_model import SISModel
 from einn.utils.experiment_utils import ExperimentUtils
+from einn.visualization.single_generalization_plotter import SingleGeneralizationPlotter
 from einn_runner import EINNRunner
 
+matplotlib.use("Agg")  # Headless, repeatable saving during batch runs.
 
 # ======================================================================
 # EXPERIMENT CONFIGURATION
 # ======================================================================
 
 # Run all documented models and both latent dimensions when this switch is enabled.
-RUN_ALL_MODELS = True
-ALL_MODEL_NAMES = ("SIR", "SIS", "ROST")
-ALL_EMBEDDING_DIMS = (20, 5)
+RUN_ALL_MODELS: bool = True
+ALL_MODEL_NAMES: tuple[str, ...] = ("SIR", "SIS", "ROST")
+ALL_EMBEDDING_DIMS: tuple[int, ...] = (20, 5)
 
 # Select a single model and embedding dimension when not running the full grid.
-MODEL_NAME = "SIS"                 # "SIR", "SIS", "SEIRM", "ROST"
-EMBEDDING_DIM = 20                 # Changing the latent dimension creates a distinct architecture and requires retraining.
+MODEL_NAME: str = "SIS"                 # "SIR", "SIS", "SEIRM", "ROST"
+EMBEDDING_DIM: int = 20                 # Changing the latent dimension creates a distinct architecture and requires retraining.
 
 # Display only the first configured principal components in diagnostic figures.
 # The explained-variance thresholds are calculated using the full PCA basis.
-PCA_COMPONENTS_TO_SHOW = 8
+PCA_COMPONENTS_TO_SHOW: int = 8
 
-NUM_STATES = 100
-SEQ_LEN = 200
-OBSERVATION_WINDOWS = (10, 18, 40, 80)  # Evaluate the same four observed-prefix lengths for each held-out trajectory.
-EPOCHS = 5
-BATCH_SIZE = 32
-SEED = 42
-DEVICE = "cuda:1"                  # Change to "cuda:0" or "cpu".
-BASE_OUTPUT_DIR = "./experiment_results/generalization"
+NUM_STATES: int = 100
+SEQ_LEN: int = 200
+OBSERVATION_WINDOWS: tuple[int, ...] = (10, 18, 40, 80)  # Evaluate the same four observed-prefix lengths for each held-out trajectory.
+EPOCHS: int = 5
+BATCH_SIZE: int = 32
+SEED: int = 42
+DEVICE: str = "cuda:1"                  # Change to "cuda:0" or "cpu".
+BASE_OUTPUT_DIR: str = "./experiment_results/generalization"
 
-NOISE_STD = {
+NOISE_STD: dict[str, float] = {
     "SIR": 0.01,
     "SIS": 0.01,
     "SEIRM": 0.01,
     "ROST": 0.0005,
 }
 
-MODEL_CONFIGS = {
+MODEL_CONFIGS: dict[str, dict[str, Any]] = {
     "SIR": {
         "class": SIRModel,
         "target_idx": 1,
@@ -131,20 +131,20 @@ MODEL_CONFIGS = {
         "d_p": 14,
         "model_type": "ROST",
         "param_ranges": {
-            "beta": (0.2, 0.6),
-            "inf_a": (0.2, 0.6),
-            "susc": (0.7, 1.0),
-            "alpha_l": (0.1, 0.3),
-            "alpha_p": (0.1, 0.4),
-            "p": (0.2, 0.8),
-            "gamma_a": (0.05, 0.2),
-            "gamma_s": (0.05, 0.2),
-            "h": (0.02, 0.15),
-            "xi": (0.02, 0.2),
-            "gamma_h": (0.05, 0.2),
-            "gamma_c": (0.02, 0.1),
-            "mu": (0.01, 0.1),
-            "gamma_cr": (0.05, 0.2),
+            "beta": (0.01, 1.0),
+            "inf_a": (0.01, 1.0),
+            "susc": (0.01, 1.0),
+            "alpha_l": (0.01, 1.0),
+            "alpha_p": (0.01, 1.0),
+            "p": (0.01, 1.0),
+            "gamma_a": (0.01, 1.0),
+            "gamma_s": (0.01, 1.0),
+            "h": (0.01, 1.0),
+            "xi": (0.01, 1.0),
+            "gamma_h": (0.01, 1.0),
+            "gamma_c": (0.01, 1.0),
+            "mu": (0.01, 1.0),
+            "gamma_cr": (0.01, 1.0),
         },
         "calibration": {
             "beta": 0.4,
@@ -173,7 +173,7 @@ MODEL_CONFIGS = {
     },
 }
 
-LOSS_WEIGHTS = {
+LOSS_WEIGHTS: dict[str, float] = {
     "data_T": 10.0,
     "data_F": 10.0,
     "aux": 8.0,
@@ -189,7 +189,7 @@ LOSS_WEIGHTS = {
     "ic_F": 20.0,
 }
 
-TEST_CORRELATIONS = {
+TEST_CORRELATIONS: dict[str, float] = {
     "mobility": -0.75,
     "temperature": -0.1,
     "testing": 0.85,
@@ -198,10 +198,12 @@ TEST_CORRELATIONS = {
 
 
 def select_device(requested: str) -> str:
-    """Reject invalid CUDA device indices before a long training run.
+    """
+    Validate a requested PyTorch device string and fail early on invalid CUDA indices.
 
-    :param str requested: Requested metric, trajectory, or visualization selector.
-    :return str: Computed result in the configured output representation.
+    :param str requested: Requested device specification (e.g. 'cpu', 'cuda:0', or 'cuda:1').
+    :return str: Validated device string unchanged.
+    :raises RuntimeError: If CUDA is requested but unavailable or the device index is out of range.
     """
     device = torch.device(requested)
     if device.type == "cuda":
@@ -215,13 +217,17 @@ def select_device(requested: str) -> str:
     return requested
 
 
-def make_data_cache_dir(model_name: str, config: dict, output_root: Path) -> Path:
-    """Cache by data-generating configuration, independently of d_e.
+def make_data_cache_dir(model_name: str, config: dict[str, Any], output_root: Path) -> Path:
+    """
+    Create and return a deterministic data-cache directory keyed by data-generation settings.
 
-    :param str model_name: Name of the mechanistic epidemic model, such as SIR, SIS, or ROST.
-    :param dict config: Configuration object or mapping controlling this operation.
-    :param Path output_root: Root directory used to store this experiment family’s outputs.
-    :return Path: Computed result in the configured output representation.
+    Excludes embedding_dim so runs at d_e = 5 and d_e = 20 for the same model and dataset
+    configuration reuse the identical cached synthetic training trajectories.
+
+    :param str model_name: Epidemiological model identifier (e.g. 'SIR', 'SIS', 'SEIRM', or 'ROST').
+    :param dict[str, Any] config: Model configuration entry from MODEL_CONFIGS.
+    :param Path output_root: Model-specific output directory under BASE_OUTPUT_DIR.
+    :return Path: Path to the created cache directory `<output_root>/data_cache/<fingerprint>`.
     """
     cache_settings = {
         "model": model_name,
@@ -245,21 +251,28 @@ def make_data_cache_dir(model_name: str, config: dict, output_root: Path) -> Pat
     return cache_dir
 
 
-def create_model(config: dict):
-    """Build an ODE model with the configured target index.
+def create_model(config: dict[str, Any]) -> Any:
+    """
+    Instantiate a mechanistic ODE model configured with `config['target_idx']`.
 
-    :param dict config: Configuration object or mapping controlling this operation.
-    :return Any: The computed objects, metrics, or artifact paths for the requested operation.
+    :param dict[str, Any] config: Model configuration entry containing `'class'` and `'target_idx'`.
+    :return Any: Instantiated ODE model object.
     """
     return config["class"](target_idx=config["target_idx"])
 
 
-def load_training_feature_scaler(cache_dir: Path, config: dict) -> StandardScaler:
-    """Fit EXACTLY on raw training X, never on test X.
+def load_training_feature_scaler(cache_dir: Path, config: dict[str, Any]) -> StandardScaler:
+    """
+    Load cached raw training covariates X and fit a StandardScaler strictly on training data.
 
-    :param Path cache_dir: Directory containing cached synthetic trajectories and metadata.
-    :param dict config: Configuration object or mapping controlling this operation.
-    :return StandardScaler: Computed result in the configured output representation.
+    Prevents data leakage by fitting exclusively on `cached['x_train'][:NUM_STATES]` rather
+    than held-out test trajectories.
+
+    :param Path cache_dir: Cache directory containing `<NUM_STATES>_states_<SEQ_LEN>len_target_<idx>.pt`.
+    :param dict[str, Any] config: Model configuration entry providing `'target_idx'`.
+    :return StandardScaler: Fitted scikit-learn StandardScaler over the 5 input features.
+    :raises FileNotFoundError: If the expected training cache file does not exist.
+    :raises ValueError: If `x_train` has fewer than NUM_STATES trajectories or unexpected feature width.
     """
     filename = cache_dir / (
         f"{NUM_STATES}_states_{SEQ_LEN}len_target_{config['target_idx']}.pt"
@@ -281,11 +294,14 @@ def load_training_feature_scaler(cache_dir: Path, config: dict) -> StandardScale
 
 
 def paired_cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Cosine similarity at each time step; zero-norm pairs are undefined.
+    """
+    Compute timestep-wise cosine similarity between aligned embedding trajectories `a` and `b`.
 
-    :param np.ndarray a: First operand or trajectory in the numerical comparison.
-    :param np.ndarray b: Second operand or trajectory in the numerical comparison.
-    :return np.ndarray: Computed result in the configured output representation.
+    Produces NaN at timesteps where either vector has norm at or below 1e-12.
+
+    :param np.ndarray a: First embedding array of shape (T, D).
+    :param np.ndarray b: Second embedding array of shape (T, D) aligned along axis 0 with `a`.
+    :return np.ndarray: 1D cosine similarity array of shape (T,).
     """
     numer = np.sum(a * b, axis=1)
     denom = np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1)
@@ -297,10 +313,12 @@ def paired_cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 def extract_embeddings(output: object) -> torch.Tensor:
-    """Accept tensor or a structured FeatureModuleOutputs object.
+    """
+    Extract a latent embedding tensor from a structured output object or raw torch.Tensor.
 
-    :param object output: Network predictions or output container used by this operation.
-    :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+    :param object output: Module return value exposing `.embeddings` or a direct torch.Tensor.
+    :return torch.Tensor: Extracted latent embedding tensor.
+    :raises TypeError: If neither `output.embeddings` nor `output` is a torch.Tensor.
     """
     embeddings = getattr(output, "embeddings", output)
     if not isinstance(embeddings, torch.Tensor):
@@ -309,26 +327,32 @@ def extract_embeddings(output: object) -> torch.Tensor:
 
 
 def evaluate_prefix(
-    models,
+    models: Any,
     x_test_scaled: np.ndarray,
     full_t_raw: torch.Tensor,
-    scaling_stats,
+    scaling_stats: Any,
     true_target: np.ndarray,
     target_idx: int,
     t_end: int,
     device: str,
-) -> dict:
-    """One prefix, full-horizon forecast and two full-horizon latent paths.
+) -> dict[str, Any]:
+    """
+    Evaluate full-horizon forecasts, latent trajectories, cosine similarity, and Procrustes metrics
+    for a single observed prefix length `t_end`.
 
-    :param Any models: The models containing the time, feature, output, and ODE modules.
-    :param np.ndarray x_test_scaled: Held-out covariates normalized using training-set statistics.
-    :param torch.Tensor full_t_raw: Unscaled time grid spanning the complete evaluation horizon.
-    :param Any scaling_stats: Statistics fitted on training data for physical-domain conversion.
-    :param np.ndarray true_target: Noise-free target-compartment reference trajectory.
-    :param int target_idx: Index of the epidemiological target compartment.
-    :param int t_end: Number of historical time coordinates exposed to the Feature module.
-    :param str device: PyTorch device used for computations.
-    :return dict: Named tensors, metrics, or model components produced by this operation.
+    :param Any models: Built EINN module bundle containing time_module, feature_module,
+        output_module, and ode_model.
+    :param np.ndarray x_test_scaled: Standardized held-out covariate array of shape (SEQ_LEN, 5).
+    :param torch.Tensor full_t_raw: Unscaled time grid tensor of shape (1, SEQ_LEN, 1).
+    :param Any scaling_stats: Training-fitted scaling statistics for time scaling and unit conversion.
+    :param np.ndarray true_target: Noise-free ground-truth target trajectory of shape (SEQ_LEN,).
+    :param int target_idx: Target compartment index within the ODE state vector.
+    :param int t_end: Number of initial observed timesteps passed to the Feature encoder.
+    :param str device: Target PyTorch device string.
+    :return dict[str, Any]: Per-window evaluation dictionary containing predictions, future MSE,
+        Time/Feature latent arrays, cosine similarity, Procrustes disparity, and pointwise residuals.
+    :raises ValueError: If `t_end` is out of range, shapes/finiteness checks fail, or predictions are invalid.
+    :raises TypeError: If `InferenceEngine.predict_future` returns a list or tuple instead of a tensor.
     """
     if not 1 <= t_end < len(true_target):
         raise ValueError(f"Invalid observed prefix length {t_end}.")
@@ -373,13 +397,15 @@ def evaluate_prefix(
     if pred.shape != true_target.shape or not np.isfinite(pred).all():
         raise ValueError("Invalid physical-scale prediction or target shape.")
 
-    # Full-horizon and strictly future-only physical-unit MSE are distinct.
+    # Compute MSE strictly over unseen future steps [t_end:] in physical units.
     mse_future = float(np.mean((pred[t_end:] - true_target[t_end:]) ** 2))
     cosine = paired_cosine_similarity(e_time, e_feature)
 
-    if np.linalg.norm(e_time - e_time.mean(axis=0)) <= 1e-12 or \
-            np.linalg.norm(e_feature - e_feature.mean(axis=0)) <= 1e-12:
-        # scipy.spatial.procrustes rejects constant point clouds.
+    # Guard against degenerate zero-variance point clouds that cause scipy.spatial.procrustes to fail.
+    if (
+        np.linalg.norm(e_time - e_time.mean(axis=0)) <= 1e-12
+        or np.linalg.norm(e_feature - e_feature.mean(axis=0)) <= 1e-12
+    ):
         procrustes_disparity = float("nan")
         procrustes_residual = np.full(len(true_target), np.nan)
     else:
@@ -402,13 +428,15 @@ def evaluate_prefix(
     }
 
 
-def fit_shared_pca(phase_results: list[dict]) -> PCA:
-    """Fit one PCA basis to all observation windows, then measure each window’s separate explained-variance curve.
+def fit_shared_pca(phase_results: list[dict[str, Any]]) -> PCA:
+    """
+    Fit a shared 2D PCA projection across all observation windows and per-window full PCA curves.
 
+    Populates each entry in `phase_results` with `'pca_coords'` (in the joint 2D basis),
+    `'cum_variance'`, `'pca_95'`, and `'pca_99'` (from a window-local full PCA fit).
 
-
-    :param list[dict] phase_results: Predictions and embedding arrays for every selected observation window.
-    :return PCA: Computed result in the configured output representation.
+    :param list[dict[str, Any]] phase_results: List of per-window result dicts containing `'latent_feature'`.
+    :return PCA: Two-component PCA estimator fitted on pooled Feature embeddings across all windows.
     """
     all_features = np.concatenate(
         [result["latent_feature"] for result in phase_results], axis=0
@@ -429,47 +457,43 @@ def fit_shared_pca(phase_results: list[dict]) -> PCA:
     return shared
 
 
+def json_write(path: Path, data: dict[str, Any]) -> None:
+    """
+    Write a dictionary as formatted UTF-8 JSON to `path`.
 
-
-
-
-
-
-
-
-def json_write(path: Path, data: dict) -> None:
-    """Serialize an experiment status or configuration mapping as UTF-8 JSON.
-
-
-    :param Path path: File-system path to the experiment artifact or configuration.
-    :param dict data: Data mapping or array to be processed by the operation.
-    :return None: No return value; state or serialized artifacts are updated in place.
+    :param Path path: Destination file path.
+    :param dict[str, Any] data: JSON-serializable dictionary (non-JSON types converted via `str`).
+    :return None: Writes the JSON file to disk.
     """
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
 
 def save_completed_experiment(
     output_dir: Path,
-    phase_results: list[dict],
+    phase_results: list[dict[str, Any]],
     shared_pca: PCA,
     true_target: np.ndarray,
-    data_test: dict,
+    data_test: dict[str, Any],
     x_test_scaled: np.ndarray,
     scaler: StandardScaler,
 ) -> None:
-    """Persist predictions, latent trajectories, PCA coordinates, metrics, scaler statistics, and raw test inputs for exact redraw.
+    """
+    Persist window metrics, compressed `.npz` embedding/prediction archives, test inputs, and PCA curves.
 
+    Writes `metrics_by_window.csv`, `test_latent_representations.npz`,
+    `test_data_and_scaler.npz`, and `pca_cumulative_variance_by_window.csv` into `output_dir`.
 
-    :param Path output_dir: Directory where generated results are written.
-    :param list[dict] phase_results: Predictions and embedding arrays for every selected observation window.
-    :param PCA shared_pca: PCA estimator already fitted to the combined latent embeddings.
-    :param np.ndarray true_target: Noise-free target-compartment reference trajectory.
-    :param dict data_test: Independent synthetic test trajectory and accompanying observations.
-    :param np.ndarray x_test_scaled: Held-out covariates normalized using training-set statistics.
-    :param StandardScaler scaler: Fitted scaler used to convert between normalized and physical quantities.
-    :return None: No return value; state or serialized artifacts are updated in place.
+    :param Path output_dir: Target directory for serialized experiment artifacts.
+    :param list[dict[str, Any]] phase_results: Per-window evaluation results with PCA fields attached.
+    :param PCA shared_pca: Shared 2D PCA estimator fitted across all windows.
+    :param np.ndarray true_target: Ground-truth noise-free target series of shape (SEQ_LEN,).
+    :param dict[str, Any] data_test: Synthetic test output dictionary containing `'x_raw'` and `'true_latent_states'`.
+    :param np.ndarray x_test_scaled: Standardized test covariate array of shape (SEQ_LEN, 5).
+    :param StandardScaler scaler: Training-fitted StandardScaler used on input features.
+    :return None: Writes CSV and NPZ files to `output_dir`.
     """
     import csv
+
     metrics_file = output_dir / "metrics_by_window.csv"
     with metrics_file.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -521,13 +545,19 @@ def save_completed_experiment(
             writer.writerow([i + 1] + [float(v) for v in curves[:, i]])
 
 
-def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict:
-    """Train and evaluate one selected epidemiological model and latent dimensionality, then save every inference artifact.
+def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict[str, Any]:
+    """
+    Run training, held-out prefix evaluation, PCA analysis, plotting, and artifact persistence
+    for a single epidemiological model and latent embedding dimension.
 
-
-    :param str model_name: Name of the mechanistic epidemic model, such as SIR, SIS, or ROST.
-    :param int embedding_dim: Dimensionality of each model-generated latent representation.
-    :return dict: Named tensors, metrics, or model components produced by this operation.
+    :param str model_name: Model key in MODEL_CONFIGS ('SIR', 'SIS', 'SEIRM', or 'ROST').
+    :param int embedding_dim: Latent embedding dimension d_e (5 or 20).
+    :return dict[str, Any]: Summary dictionary containing status, output_dir, mean_future_mse,
+        and mean_pca_d95.
+    :raises ValueError: If `model_name`, `embedding_dim`, `PCA_COMPONENTS_TO_SHOW`, or
+        `OBSERVATION_WINDOWS` is invalid.
+    :raises FileNotFoundError: If a saved model checkpoint is missing after training.
+    :raises Exception: Re-raises any error after recording status `'hiba'` and writing `hiba_reszletei.txt`.
     """
     if model_name not in MODEL_CONFIGS:
         raise ValueError(f"Ismeretlen epidemiológiai modell: {model_name!r}.")
@@ -535,9 +565,11 @@ def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict:
         raise ValueError("A beágyazás dimenziója csak 5 vagy 20 lehet.")
     if not 1 <= PCA_COMPONENTS_TO_SHOW <= 20:
         raise ValueError("PCA_COMPONENTS_TO_SHOW értéke 1 és 20 között lehet.")
-    if len(OBSERVATION_WINDOWS) != 4 or \
-            sorted(set(OBSERVATION_WINDOWS)) != list(OBSERVATION_WINDOWS) or \
-            not all(1 <= n < SEQ_LEN for n in OBSERVATION_WINDOWS):
+    if (
+        len(OBSERVATION_WINDOWS) != 4
+        or sorted(set(OBSERVATION_WINDOWS)) != list(OBSERVATION_WINDOWS)
+        or not all(1 <= n < SEQ_LEN for n in OBSERVATION_WINDOWS)
+    ):
         raise ValueError("Négy növekvő megfigyelési ablak szükséges, mind < SEQ_LEN.")
 
     device = select_device(DEVICE)
@@ -549,7 +581,7 @@ def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict:
     data_cache_dir = make_data_cache_dir(model_name, config, output_root)
     target_idx = config["target_idx"]
 
-    run_settings = {
+    run_settings: dict[str, Any] = {
         "model": model_name,
         "embedding_dim": embedding_dim,
         "num_training_trajectories": NUM_STATES,
@@ -673,7 +705,7 @@ def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict:
         full_t = torch.arange(
             SEQ_LEN, dtype=torch.float32, device=device
         ).view(1, SEQ_LEN, 1)
-        phase_results = []
+        phase_results: list[dict[str, Any]] = []
         for end in OBSERVATION_WINDOWS:
             print(f"Kiértékelés: {end} megfigyelt időpont")
             result = evaluate_prefix(
@@ -707,8 +739,10 @@ def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict:
             phase_results=phase_results,
             shared_pca=shared_pca,
             true_target=true_target,
-            target_name=("Kumulált fertőzöttek aránya"
-                         if model_name == "ROST" else "Fertőzöttek aránya"),
+            target_name=(
+                "Kumulált fertőzöttek aránya"
+                if model_name == "ROST" else "Fertőzöttek aránya"
+            ),
             output_path=plot_path,
             model_name=model_name,
             embedding_dim=embedding_dim,
@@ -728,7 +762,7 @@ def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict:
         run_settings["figure_pdf"] = plot_path.with_suffix(".pdf").name
         json_write(output_dir / "experiment_config.json", run_settings)
 
-        results_for_manifest = {
+        results_for_manifest: dict[str, Any] = {
             "model": model_name,
             "embedding_dim": embedding_dim,
             "status": "sikeres",
@@ -764,10 +798,11 @@ def run_generalization_experiment(model_name: str, embedding_dim: int) -> dict:
 
 
 def main() -> None:
-    """Dispatch all command-line experiment selections or saved-data plots.
+    """
+    Execute all planned single-model generalization runs and write `all_runs_summary.json`.
 
-
-    :return None: No return value; state or serialized artifacts are updated in place.
+    :return None: Runs selected `(model_name, embedding_dim)` pairs and saves summary metadata.
+    :raises RuntimeError: If one or more planned runs fail.
     """
     plans = (
         [(model_name, d) for model_name in ALL_MODEL_NAMES for d in ALL_EMBEDDING_DIMS]
@@ -775,7 +810,7 @@ def main() -> None:
     )
     root = Path(BASE_OUTPUT_DIR)
     root.mkdir(parents=True, exist_ok=True)
-    report = []
+    report: list[dict[str, Any]] = []
     print(f"Tervezett futtatások száma: {len(plans)}")
     for run_index, (model_name, embedding_dim) in enumerate(plans, 1):
         print(f"\n[{run_index}/{len(plans)}] {model_name}, d_e={embedding_dim}")
@@ -804,6 +839,7 @@ def main() -> None:
             f"{len(report) - successes} futtatás hibával ért véget. "
             f"Részletek: {root / 'all_runs_summary.json'}"
         )
+
 
 # The figure remains generated by the original plotting method.
 plot_results = SingleGeneralizationPlotter().plot_results

@@ -79,6 +79,7 @@ class BasePhaseOptimizer(ABC):
         Executes a full optimization iteration: Forward -> Loss -> Backward -> Step.
 
         :param PhaseContext context: The current phase state and data batch.
+
         :return tuple[float, dict[str, float]]: The calculated scalar loss value for logging and the
          dictionary for loss components.
         """

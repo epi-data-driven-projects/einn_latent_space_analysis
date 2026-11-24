@@ -15,7 +15,8 @@ class SIRModel(BaseODEModel):
         Initializes the SIR model.
 
         :param float population_n: The total population (N). Defaults to 1.0 for normalized fractional populations.
-        :param int target_idx: The index of the compartment that corresponds to the observed target data (e.g., 1 for Infected).
+        :param int target_idx: The index of the compartment that corresponds
+         to the observed target data (e.g., 1 for Infected).
         """
         super().__init__(d_s=3, target_idx=target_idx)
         self.population_n = population_n
@@ -44,6 +45,7 @@ class SIRModel(BaseODEModel):
 
         :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, 3].
         :param torch.Tensor params: The current physical parameters [beta, gamma]. Shape: [Batch, Seq_len, 2] or [2].
+
         :return torch.Tensor: The computed time derivatives of the states. Shape: [Batch, Seq_len, 3].
         """
         # Using ellipsis [..., 0:1] ensures dimensional broadcasting works safely whether params
@@ -71,6 +73,7 @@ class SIRModel(BaseODEModel):
 
         :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, 3].
         :param bool detach_params: Whether to detach parameters from the computation graph.
+
         :return ODESolution: An object containing derivatives and the scaled parameters.
         """
         params = self.get_scaled_params(detach=detach_params)

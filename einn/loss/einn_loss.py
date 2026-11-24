@@ -15,13 +15,13 @@ class EINNLoss(nn.Module):
     """
 
     def __init__(self, config: EINNTrainConfig, ode_model: BaseODEModel, scaling_stats: DataScalingStats):
-        """Initializes the EINNLoss module.
+        """
+        Initializes the EINNLoss module.
 
         :param EINNTrainConfig config: The configuration object containing loss weights.
         :param BaseODEModel ode_model: The epidemiological ODE model providing monotonicity rules.
 
         :param DataScalingStats scaling_stats: Statistics fitted on training data for physical-domain conversion.
-        :return None: No return value; state or serialized artifacts are updated in place.
         """
         super().__init__()
         self.config = config
@@ -33,11 +33,13 @@ class EINNLoss(nn.Module):
         self.mono_inc_indices = self.ode_model.monotonicity_indices["increasing"]
 
     def calc_data_loss(self, states: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Calculates the Mean Squared Error (MSE) between predicted states and observed data
+        """
+        Calculates the Mean Squared Error (MSE) between predicted states and observed data
         using the specific target_idx defined in the ODE model.
 
         :param torch.Tensor states: Current compartment populations in model state order.
         :param torch.Tensor targets: Reference values used to evaluate the prediction loss.
+
         :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
         """
         if states.numel() == 0 or targets.numel() == 0:
@@ -55,6 +57,7 @@ class EINNLoss(nn.Module):
 
         :param torch.Tensor states: Predicted compartment states. Shape: [Batch, Seq_len, d_s].
         :param torch.Tensor aux_targets: Ideal simulated compartment states.
+
         :return torch.Tensor: Auxiliary MSE loss.
         """
         if states.numel() == 0:
@@ -70,6 +73,7 @@ class EINNLoss(nn.Module):
 
         :param torch.Tensor ds_dt_nn: Empirical time derivative from the neural network.
         :param torch.Tensor ds_dt_ode: Analytical derivative from the ODE model.
+
         :return torch.Tensor: Physics MSE loss.
         """
         if ds_dt_nn.numel() == 0:
@@ -88,6 +92,7 @@ class EINNLoss(nn.Module):
         :param torch.Tensor ds_dt: Time derivative of all the states. Shape: [Batch, Seq_len, d_s].
         :param list[int] inc_indices: List of indices that must increase.
         :param list[int] dec_indices: List of indices that must decrease.
+
         :return torch.Tensor: A scalar tensor representing the monotonicity penalty.
         """
         if ds_dt.numel() == 0:
@@ -111,8 +116,8 @@ class EINNLoss(nn.Module):
     def calc_parameter_smoothness_loss(params: torch.Tensor) -> torch.Tensor:
         """
         Penalizes large jumps in time-dependent physical parameters between consecutive steps.
-
         :param torch.Tensor params: Time-dependent parameter tensor. Shape: [Batch, Seq_len, d_p].
+
         :return torch.Tensor: Parameter smoothness loss.
         """
         # For time-independent parameters
@@ -130,6 +135,7 @@ class EINNLoss(nn.Module):
 
         :param torch.Tensor target: The tensor from the TimeModule network.
         :param torch.Tensor prediction: The tensor from the FeatureModule network.
+
         :return torch.Tensor: KD MSE loss (embedding or target loss)
         """
         if prediction.numel() == 0:
@@ -139,12 +145,13 @@ class EINNLoss(nn.Module):
 
     @staticmethod
     def calc_ic_loss(states: torch.Tensor, t: torch.Tensor, initial_states: list[float]) -> torch.Tensor:
-        """Compute ic loss using the original mathematical definition.
-
+        """
+        Compute ic loss using the original mathematical definition.
 
         :param torch.Tensor states: Current compartment populations in model state order.
         :param torch.Tensor t: Time coordinates of the modeled trajectory.
         :param list[float] initial_states: Initial compartment populations in model state order.
+
         :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
         """
         if states.numel() == 0 or t.numel() == 0 or not initial_states: return torch.tensor(0.0, device=states.device)
@@ -155,7 +162,6 @@ class EINNLoss(nn.Module):
             (states_at_t0.shape[0], -1)
         return F.mse_loss(states_at_t0, target_ic)
 
-
     def forward(self, phase_context: PhaseContext,
                 network_outputs: NetworkOutputs) -> tuple[torch.Tensor, dict[str, float]]:
         """
@@ -164,6 +170,7 @@ class EINNLoss(nn.Module):
 
         :param PhaseContext phase_context: The context object indicating the current phase.
         :param NetworkOutputs network_outputs: Dataclass containing network predictions and derivatives.
+
         :return tuple[torch.Tensor, dict[str, float]]: The weighted composite loss scalar and a dictionary
             containing the loss components
         """
@@ -171,12 +178,12 @@ class EINNLoss(nn.Module):
         loss_dict = {}
 
         def add_loss(component_name: str, loss_tensor: torch.Tensor):
-            """Perform add loss as part of evaluate the phase-specific weighted objective without altering the predicted states.
-
+            """
+            Perform add loss as part of evaluate the phase-specific weighted objective
+            without altering the predicted states.
 
             :param str component_name: Identifier of the selected prediction or loss component.
             :param torch.Tensor loss_tensor: Tensor of unreduced loss values to aggregate.
-            :return Any: The computed objects, metrics, or artifact paths for the requested operation.
             """
             nonlocal total_loss
             weight = self.weights.get(component_name, 0.0)
@@ -228,7 +235,8 @@ class EINNLoss(nn.Module):
                      loss_tensor=self.calc_knowledge_distillation_loss(
                          target=network_outputs.e_t.detach(),
                          prediction=network_outputs.e_t_F))
-            add_loss('ic_F', self.calc_ic_loss(network_outputs.s_t_F, phase_context.t, self.scaling_stats.initial_states))
+            add_loss('ic_F',
+                     self.calc_ic_loss(network_outputs.s_t_F, phase_context.t, self.scaling_stats.initial_states))
             # Phase 4: Final Fine-Tuning (Gradient Loss / Feature ODE)
         if phase_context.phase_num == 4:
             add_loss(component_name='ode_F',

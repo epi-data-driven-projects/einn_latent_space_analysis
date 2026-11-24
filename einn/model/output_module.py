@@ -37,7 +37,9 @@ class OutputModule(BaseNeuralNetwork):
         """
         Forward pass decoding the embedding into physical compartment states.
         PyTorch's nn.Linear inherently broadcasts over the Batch and Seq_len dimensions.
+
         :param torch.Tensor e: Latent embedding. Shape: [Batch, Seq_len, d_e].
+
         :return torch.Tensor: Predicted compartment states. Shape: [Batch, Seq_len, d_s].
         """
 

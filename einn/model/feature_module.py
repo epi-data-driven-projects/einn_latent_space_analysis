@@ -52,9 +52,11 @@ class FeatureModule(BaseNeuralNetwork):
     def forward(self, x: torch.Tensor, t: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
         """
         Full forward pass mapping sequences to embeddings at given time steps.
+
         :param torch.Tensor x: Input observations. Shape: [Batch, Seq_len, dim_seq_in].
         :param torch.Tensor t: Target time steps. Shape: [Batch, Seq_len, 1].
         :param torch.Tensor mask: Optional mask tensor. Shape: [Batch, Seq_len].
+
         :return torch.Tensor: Feature embeddings. Shape: [Batch, Seq_len, dim_out].
         """
         h = self.encoder(x=x, mask=mask)

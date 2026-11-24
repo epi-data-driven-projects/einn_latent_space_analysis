@@ -1,5 +1,13 @@
+"""
+Multi-model synthetic trajectory generator, preprocessor, and ExpandingWindowLoader builder.
+
+Supports the SIR-SIS and SIR-SEIR model pairs studied in thesis Sections 2.4 and 4.2,
+unifying compartment dimensions across paired models (including zero-padding the E
+compartment for SIR in SIR-SEIR runs) and enforcing strict train/test scaler separation
+(Section 3).
+"""
 from copy import deepcopy
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -7,14 +15,14 @@ import torch
 from einn.data.data_preprocessor import DataPreprocessor
 from einn.data.data_scaling_stats import DataScalingStats
 from einn.data.synthetic_data_generator import SyntheticDataGenerator
+from einn.ode.seir_model import SEIRModel
+from einn.ode.sir_model import SIRModel
 from einn_multimodel.data.expanding_window_loader import ExpandingWindowLoader
 from einn_multimodel.model.model_labels import validate_model_registry
-from einn.ode.sir_model import SIRModel
-from einn.ode.seir_model import SEIRModel
-from einn_multimodel.ode.sis_model import SISModel
 from einn_multimodel.ode.sir_seir_compatible_model import SIRSEIRCompatibleModel
+from einn_multimodel.ode.sis_model import SISModel
 
-
+# Default uniform sampling intervals for mechanistic ODE parameters per model family.
 DEFAULT_MODEL_PARAM_RANGES: dict[str, dict[str, tuple[float, float]]] = {
     "SIR": {"beta": (0.3, 0.6), "gamma": (0.05, 0.2)},
     "SIS": {"beta": (0.3, 0.6), "gamma": (0.05, 0.2)},
@@ -25,23 +33,28 @@ DEFAULT_MODEL_PARAM_RANGES: dict[str, dict[str, tuple[float, float]]] = {
     },
 }
 
-PARAMETER_ORDER = {
+# Canonical parameter ordering expected by each ODE model's forward signature.
+PARAMETER_ORDER: dict[str, tuple[str, ...]] = {
     "SIR": ("beta", "gamma"),
     "SIS": ("beta", "gamma"),
     "SEIR": ("beta", "alpha", "gamma"),
 }
 
-SUPPORTED_MODEL_PAIRS = {
+# Epidemiological model pairs supported by the unified OutputModule layout (Section 2.4).
+SUPPORTED_MODEL_PAIRS: set[frozenset[str]] = {
     frozenset(("SIR", "SIS")),
     frozenset(("SIR", "SEIR")),
 }
 
 
 class MultiModelInputLoader:
-    """Generate synthetic trajectories, optionally with every model assumption.
+    """
+    Generate, standardize, and package labeled synthetic trajectories for two-model EINN runs.
 
-    pair_with_all_assumptions=False generates only correctly labelled examples.
-    The assumed_model_label key then remains only as a compatibility alias.
+    When pair_with_all_assumptions is True, each simulated trajectory is paired with every
+    candidate assumed model label (supporting matched/mismatched control experiments in
+    thesis Section 5). When False, only true-label records are created and assumed_model_label
+    acts as a compatibility alias for true_model_label.
     """
 
     def __init__(
@@ -49,27 +62,32 @@ class MultiModelInputLoader:
         device: str = "cpu",
         population_n: float = 1.0,
         seed: int = 42,
-    ):
-        """Initialize MultiModelInputLoader to generate and standardize labeled synthetic trajectories across mechanistic models.
-
-
-        :param str device: PyTorch device used for computations.
-        :param float population_n: Total modeled population, or one for population-fraction states.
-        :param int seed: Seed used to control pseudorandom number generation.
-        :return None: No return value; state or serialized artifacts are updated in place.
+    ) -> None:
         """
-        self.device = device
-        self.population_n = float(population_n)
-        self.rng = np.random.default_rng(seed)
+        Initialize the multi-model loader with compute device, population scale, and RNG seed.
+
+        :param str device: Target PyTorch device string for the output ExpandingWindowLoader.
+        :param float population_n: Total population N (1.0 for normalized population fractions).
+        :param int seed: Random seed for reproducible parameter, noise, and covariate sampling.
+        :return None: Initializes internal RNG and empty preprocessor reference in place.
+        """
+        self.device: str = device
+        self.population_n: float = float(population_n)
+        self.rng: np.random.Generator = np.random.default_rng(seed)
         self.preprocessor: Optional[DataPreprocessor] = None
 
     @staticmethod
-    def _resolve_layout(model_names: tuple[str, ...]):
-        """Perform resolve layout as part of generate and standardize labeled synthetic trajectories across mechanistic models.
+    def _resolve_layout(model_names: tuple[str, ...]) -> dict[str, Any]:
+        """
+        Resolve the shared state dimension d_s, target index, and default initial states for a model pair.
 
+        For SIR-SIS, uses 3 compartments (S, I, R/pad) with infection_idx = 1.
+        For SIR-SEIR, uses 4 compartments (S, E, I, R) with infection_idx = 2 (Section 2.4).
 
-        :param tuple[str, ...] model_names: Ordered epidemiological model identifiers.
-        :return Any: The computed objects, metrics, or artifact paths for the requested operation.
+        :param tuple[str, ...] model_names: Two uppercase epidemiological model identifiers.
+        :return dict[str, Any]: Layout dict with keys d_s (int), infection_idx (int),
+            and default_initial_states (list[float] of length d_s).
+        :raises ValueError: If model_names is not one of the supported pairs.
         """
         pair = frozenset(model_names)
         if pair == frozenset(("SIR", "SIS")):
@@ -88,13 +106,21 @@ class MultiModelInputLoader:
             "Supported model pairs are ('SIR', 'SIS') and ('SIR', 'SEIR')."
         )
 
-    def _make_model(self, name: str, model_names: tuple[str, ...]):
-        """Perform make model as part of generate and standardize labeled synthetic trajectories across mechanistic models.
+    def _make_model(
+        self,
+        name: str,
+        model_names: tuple[str, ...],
+    ) -> SIRModel | SISModel | SEIRModel | SIRSEIRCompatibleModel:
+        """
+        Instantiate the ODE model for name with compartment layout compatible with model_names.
 
+        When SIR is paired with SEIR, returns SIRSEIRCompatibleModel so SIR outputs a 4-state
+        vector with a constant-zero E compartment (thesis Section 2.4).
 
-        :param str name: Identifier used for selecting the corresponding model or saved artifact.
-        :param tuple[str, ...] model_names: Ordered epidemiological model identifiers.
-        :return Any: The computed objects, metrics, or artifact paths for the requested operation.
+        :param str name: Uppercase model identifier (SIR, SIS, or SEIR).
+        :param tuple[str, ...] model_names: Active two-model pair determining the shared layout.
+        :return SIRModel | SISModel | SEIRModel | SIRSEIRCompatibleModel: Configured ODE model instance.
+        :raises ValueError: If name is not a supported model.
         """
         pair = frozenset(model_names)
 
@@ -128,24 +154,28 @@ class MultiModelInputLoader:
             Dict[str, Dict[str, Tuple[float, float]]]
         ],
     ) -> dict[str, dict[str, tuple[float, float]]]:
-        """Perform resolve param ranges as part of generate and standardize labeled synthetic trajectories across mechanistic models.
+        """
+        Merge default, legacy shared, and per-model ODE parameter sampling intervals and validate them.
 
-
-        :param tuple[str, ...] model_names: Ordered epidemiological model identifiers.
-        :param Optional[Dict[str, Tuple[float, float]]] param_ranges: Allowed intervals for sampled mechanistic parameters.
-        :param Optional[Dict[str, Dict[str, Tuple[float, float]]]] model_param_ranges: Sampling intervals for physical parameters of each model family.
-        :return dict[str, dict[str, tuple[float, float]]]: Named tensors, metrics, or model components produced by this operation.
+        :param tuple[str, ...] model_names: Active two-model pair.
+        :param Optional[Dict[str, Tuple[float, float]]] param_ranges: Optional legacy shared
+            parameter bounds overriding matching parameter names across all selected models.
+        :param Optional[Dict[str, Dict[str, Tuple[float, float]]]] model_param_ranges: Optional
+            model-specific parameter bounds mapping model_name -> param_name -> (low, high).
+        :return dict[str, dict[str, tuple[float, float]]]: Validated per-model parameter intervals.
+        :raises ValueError: If unknown models/parameters are supplied, required parameters are
+            missing, or any interval does not satisfy finite low < high.
         """
         resolved = deepcopy(DEFAULT_MODEL_PARAM_RANGES)
 
-        # Backward compatibility: a legacy shared range dictionary overrides
-        # matching parameter names for every selected model.
+        # Apply legacy shared parameter bounds to any selected model that defines that parameter.
         if param_ranges is not None:
             for name in model_names:
                 for key, bounds in param_ranges.items():
                     if key in resolved[name]:
                         resolved[name][key] = tuple(bounds)
 
+        # Apply explicit model-specific overrides after verifying model and parameter names.
         if model_param_ranges is not None:
             unknown_models = set(model_param_ranges).difference(model_names)
             if unknown_models:
@@ -163,6 +193,7 @@ class MultiModelInputLoader:
                     {key: tuple(value) for key, value in ranges.items()}
                 )
 
+        # Verify completeness and strict validity (low < high) for every active model parameter.
         for name in model_names:
             missing = set(PARAMETER_ORDER[name]).difference(resolved[name])
             if missing:
@@ -182,12 +213,13 @@ class MultiModelInputLoader:
         model_name: str,
         ranges: dict[str, dict[str, tuple[float, float]]],
     ) -> tuple[dict[str, float], list[float]]:
-        """Perform sample params as part of generate and standardize labeled synthetic trajectories across mechanistic models.
+        """
+        Draw one uniform random ODE parameter vector for model_name in canonical PARAMETER_ORDER.
 
-
-        :param str model_name: Name of the mechanistic epidemic model, such as SIR, SIS, or ROST.
-        :param dict[str, dict[str, tuple[float, float]]] ranges: Model-specific ranges used to sample mechanistic parameters.
-        :return tuple[dict[str, float], list[float]]: Computed result in the configured output representation.
+        :param str model_name: Uppercase model identifier (SIR, SIS, or SEIR).
+        :param dict[str, dict[str, tuple[float, float]]] ranges: Resolved sampling intervals per model.
+        :return tuple[dict[str, float], list[float]]: Pair (param_dict, param_list) containing
+            named parameter values and their ordered list of length d_p.
         """
         values = {
             key: float(self.rng.uniform(*ranges[model_name][key]))
@@ -213,27 +245,42 @@ class MultiModelInputLoader:
         fit_scalers: bool = True,
         scaling_stats: Optional[DataScalingStats] = None,
         pair_with_all_assumptions: bool = True,
-        **_kwargs,
+        **_kwargs: Any,
     ) -> tuple[ExpandingWindowLoader, DataScalingStats]:
-        """Construct prepare training data using the configured model and experiment settings.
+        """
+        Generate synthetic multi-model trajectories, standardize them, and build the window loader.
 
+        Each generated record has arrays x of shape (seq_len, 5), y of shape (seq_len, 1), and
+        aux of shape (seq_len, d_s). When fit_scalers is True, Z-score scalers are fitted once
+        on the concatenated training set of shape (N_records * seq_len, *); when False, the
+        previously fitted training scalers are applied to prevent test-set leakage (Section 3).
 
-        :param int num_states_per_model: Number of independent synthetic trajectories per epidemiological model.
-        :param int seq_len: Number of time coordinates per generated trajectory.
-        :param Optional[list[float]] initial_states: Initial compartment populations in model state order.
-        :param Optional[Dict[str, Tuple[float, float]]] param_ranges: Allowed intervals for sampled mechanistic parameters.
-        :param Optional[Dict[str, Dict[str, Tuple[float, float]]]] model_param_ranges: Sampling intervals for physical parameters of each model family.
-        :param Optional[Dict[str, Tuple[float, float]]] correlation_ranges: Sampling intervals for the covariate correlation coefficients.
-        :param float noise_std: Relative observation-noise scale configured for the experiment.
-        :param int window_step: Interval between successive expanding observation-window lengths.
-        :param int window_min_days: Minimum number of observed time points in each training prefix.
-        :param bool randomize_records: Whether to permute the order of generated trajectory records.
-        :param tuple[str, ...] model_names: Ordered epidemiological model identifiers.
-        :param bool fit_scalers: Whether to fit new normalization statistics on this dataset.
-        :param Optional[DataScalingStats] scaling_stats: Statistics fitted on training data for physical-domain conversion.
-        :param bool pair_with_all_assumptions: Whether each trajectory is paired with all candidate assumed model labels.
-        :param dict _kwargs: Additional named arguments.
-        :return tuple[ExpandingWindowLoader, DataScalingStats]: Computed result in the configured output representation.
+        :param int num_states_per_model: Number of independent trajectories simulated per model family.
+        :param int seq_len: Number of timesteps T per simulated trajectory.
+        :param Optional[list[float]] initial_states: Physical initial compartment proportions s(0)
+            of length d_s; uses layout defaults if None.
+        :param Optional[Dict[str, Tuple[float, float]]] param_ranges: Optional legacy shared parameter bounds.
+        :param Optional[Dict[str, Dict[str, Tuple[float, float]]]] model_param_ranges: Optional
+            per-model parameter sampling bounds.
+        :param Optional[Dict[str, Tuple[float, float]]] correlation_ranges: Target-correlation bounds
+            for the 4 synthetic covariates (mobility, temperature, testing, stringency).
+        :param float noise_std: Relative Gaussian observation-noise scale applied to the target.
+        :param int window_step: Step size between consecutive expanding-window prefix lengths.
+        :param int window_min_days: Shortest observation prefix length included in the dataset.
+        :param bool randomize_records: If True, randomly permutes the generated records before slicing.
+        :param tuple[str, ...] model_names: Two distinct model names forming a supported pair.
+        :param bool fit_scalers: If True, fits new training scalers; if False, reuses self.preprocessor.
+        :param Optional[DataScalingStats] scaling_stats: Training scaling statistics required when
+            fit_scalers is False.
+        :param bool pair_with_all_assumptions: If True, pairs each trajectory with every model in
+            model_names as assumed_model_label; if False, only creates matched true-label records.
+        :param Any _kwargs: Ignored extra keyword arguments retained for caller compatibility.
+        :return tuple[ExpandingWindowLoader, DataScalingStats]: Pair (dataset, scaling_stats)
+            containing the standardized multi-model expanding-window dataset and scaling metadata.
+        :raises ValueError: If trajectory counts, horizon, model pair, initial states, or
+            fit_scalers=False arguments are invalid.
+        :raises TypeError: If pair_with_all_assumptions is not a bool.
+        :raises RuntimeError: If fit_scalers is False before training scalers have been fitted.
         """
         if num_states_per_model < 1:
             raise ValueError("num_states_per_model must be at least 1.")
@@ -273,13 +320,14 @@ class MultiModelInputLoader:
         if not isinstance(pair_with_all_assumptions, bool):
             raise TypeError("pair_with_all_assumptions must be bool.")
 
-        records: list[dict] = []
+        records: list[dict[str, Any]] = []
         print(
             f"Generating {num_states_per_model} independent trajectories per model; "
             f"selected models={model_names}; "
             f"routing={'all assumptions' if pair_with_all_assumptions else 'TRUE MODEL ONLY'}."
         )
 
+        # Simulate num_states_per_model trajectories per true model family.
         for true_name in model_names:
             for state_idx in range(num_states_per_model):
                 true_param_dict, true_param_list = self._sample_params(
@@ -303,12 +351,13 @@ class MultiModelInputLoader:
                     correlations=correlations,
                 )
 
-                # In the true-only experiment no cross-assumption copies are generated.
+                # Create either matched-only records or full cross-assumption pairs.
                 for assumed_name in (model_names if pair_with_all_assumptions else (true_name,)):
                     if assumed_name == true_name:
                         aux = generated["true_latent_states"].copy()
                         assumed_param_dict = true_param_dict
                     else:
+                        # Simulate an auxiliary reference trajectory under the mismatched assumed ODE.
                         assumed_param_dict, assumed_param_list = self._sample_params(
                             assumed_name, ranges
                         )
@@ -325,15 +374,14 @@ class MultiModelInputLoader:
                             true_params=assumed_param_list,
                         )
 
-                    # Anchor the assumed-model trajectory to the observed,
-                    # clean infected curve. The noisy observation remains in x.
+                    # Anchor the target compartment in aux to the clean ground-truth curve; x keeps noisy observations.
                     aux[:, infection_idx] = generated["y_raw"].ravel()
 
                     records.append(
                         {
-                            "x": generated["x_raw"],
-                            "y": generated["y_raw"],
-                            "aux": aux,
+                            "x": generated["x_raw"],            # Shape: (seq_len, 5)
+                            "y": generated["y_raw"],            # Shape: (seq_len, 1)
+                            "aux": aux,                         # Shape: (seq_len, d_s)
                             "true_label": model_to_id[true_name],
                             "assumed_label": model_to_id[assumed_name],
                             "true_name": true_name,
@@ -348,12 +396,13 @@ class MultiModelInputLoader:
             permutation = self.rng.permutation(len(records))
             records = [records[int(i)] for i in permutation]
 
+        # Concatenate all records along the time axis for vectorized standardization: (N_records * seq_len, *).
         x_all = np.concatenate([record["x"] for record in records], axis=0)
         y_all = np.concatenate([record["y"] for record in records], axis=0)
         aux_all = np.concatenate([record["aux"] for record in records], axis=0)
 
         if fit_scalers:
-            # Fit normalization statistics exclusively on the training trajectories.
+            # Fit Z-score scalers exclusively on training data (Section 3).
             preprocessor = DataPreprocessor()
             scaled, scaling_stats = preprocessor.fit_transform(
                 x_raw=x_all,
@@ -365,10 +414,11 @@ class MultiModelInputLoader:
             )
             self.preprocessor = preprocessor
 
+            # Fix temporal min-max bounds to a single trajectory horizon [0, seq_len - 1].
             scaling_stats.t_min = torch.tensor(0.0, dtype=torch.float32)
             scaling_stats.t_max = torch.tensor(float(seq_len - 1), dtype=torch.float32)
         else:
-            # Transform held-out trajectories with the already-fitted training scalers.
+            # Apply previously fitted training scalers to held-out evaluation trajectories.
             if self.preprocessor is None:
                 raise RuntimeError(
                     "Cannot prepare test data before fitting the training scalers. "
@@ -396,10 +446,11 @@ class MultiModelInputLoader:
                 ),
             }
 
+        # Slice standardized arrays back into per-trajectory lists of shape (seq_len, *).
         x_scaled = scaled["x"].cpu().numpy()
         y_scaled = scaled["y"].cpu().numpy()
         aux_scaled = scaled["aux_targets"].cpu().numpy()
-        t_local = np.arange(seq_len, dtype=np.float32).reshape(-1, 1)
+        t_local = np.arange(seq_len, dtype=np.float32).reshape(-1, 1)  # Shape: (seq_len, 1)
 
         x_list, y_list, aux_list, t_list = [], [], [], []
         true_labels, assumed_labels = [], []

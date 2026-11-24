@@ -1,10 +1,9 @@
-"""Recreate EINN figures using saved numerical arrays, without inference.
-
-This entry point never imports a trainer, model builder, ODE solver, or
-synthetic-data generator. It only uses saved trajectories and visualization
-classes, and places regenerated reports in separate output directories.
 """
+Entry point for regenerating EINN figures and summaries from saved `.npz` arrays.
 
+Avoids importing training loops, model builders, ODE solvers, or data generators so
+reports can be reproduced purely from serialized arrays into dedicated output directories.
+"""
 from __future__ import annotations
 
 import argparse
@@ -19,12 +18,13 @@ def redraw_single(
     model_name: str,
     embedding_dim: int,
 ) -> list[Path]:
-    """Rebuild the four-by-four single-model report from saved arrays.
+    """
+    Rebuild single-model 4x4, cosine, Procrustes, and CSV artifacts from saved arrays.
 
-    :param Path saved_directory: Directory containing the original NPZ results.
-    :param str model_name: Model family (SIR, SIS, or ROST).
-    :param int embedding_dim: Original latent-space dimensionality.
-    :return list[Path]: Paths to reconstructed figures and numerical summary.
+    :param Path saved_directory: Directory containing saved single-model `.npz` results.
+    :param str model_name: Epidemiological model name (e.g. SIR, SIS, or ROST).
+    :param int embedding_dim: Latent embedding dimension d_e used in the saved run.
+    :return list[Path]: Paths of generated figure and CSV files under `ujrarajzolt_abrak/`.
     """
     from einn.analysis.saved_single_loader import load_experiment
     from einn.visualization.single_four_by_four_plotter import (
@@ -44,10 +44,12 @@ def redraw_single(
 
 
 def redraw_dual(saved_directory: Path) -> tuple[str, str]:
-    """Rebuild the full dual-inference grid without loading the trained model.
+    """
+    Rebuild the dual-inference comparison grid from saved PCA and per-window `.npz` archives.
 
-    :param Path saved_directory: Location of the original PCA and forecast NPZs.
-    :return tuple[str, str]: PNG and PDF report paths.
+    :param Path saved_directory: Directory containing `dual_inference_saved_arrays.npz` and
+        `dual_inference_window_<idx>.npz` files.
+    :return tuple[str, str]: Paths (png_path, pdf_path) produced by DualInferencePlotter.
     """
     from einn.visualization.dual_inference_plotter import DualInferencePlotter
 
@@ -58,6 +60,7 @@ def redraw_dual(saved_directory: Path) -> tuple[str, str]:
         "pca_a_2", "pca_b_1", "pca_b_2",
     )
 
+    # Load shared window metadata, ground-truth targets, and precomputed PCA projections.
     with np.load(packed_arrays, allow_pickle=False) as data:
         observation_windows = data["observation_windows"].astype(int)
         true_target_a = data["true_target_1"].copy()
@@ -69,6 +72,7 @@ def redraw_dual(saved_directory: Path) -> tuple[str, str]:
             for key in pca_fields
         }
 
+    # Assemble per-window prediction dictionaries for both model branches (`a_` and `b_`).
     phase_results = []
     for index, observation_end in enumerate(observation_windows):
         window_path = saved_directory / f"dual_inference_window_{index}.npz"
@@ -107,12 +111,17 @@ def redraw_multi(
     pair: tuple[str, str],
     embedding_dim: int,
 ) -> list[Path]:
-    """Rebuild multi-model reports and their joint held-out latent projection.
+    """
+    Rebuild multi-model 4x4 grids and the joint held-out latent-space Hausdorff report.
 
-    :param Path saved_directory: Directory of saved multi-model numeric arrays.
-    :param tuple[str, str] pair: The compared mechanistic model identifiers.
-    :param int embedding_dim: Number of original latent embedding coordinates.
-    :return list[Path]: Paths of the regenerated four-by-four and joint figures.
+    Reconstructs per-window dictionaries from `multimodel_generalization_*_4x4.npz` files
+    and, when `all_heldout_feature_embeddings.npz` is present, recomputes raw and unit-L2
+    Hausdorff distances in the original d_e space via `cKDTree`.
+
+    :param Path saved_directory: Directory containing serialized multi-model `.npz` files.
+    :param tuple[str, str] pair: Pair of compared model names in uppercase (e.g. ('SIR', 'SIS')).
+    :param int embedding_dim: Latent embedding dimension d_e of the saved embeddings.
+    :return list[Path]: Paths of all regenerated report files written under `redrawn/`.
     """
     from scipy.spatial import cKDTree
     from einn_multimodel.visualization.multi_model_plotter import (
@@ -123,6 +132,7 @@ def redraw_multi(
     output_directory = saved_directory / "redrawn"
     output_directory.mkdir(parents=True, exist_ok=True)
 
+    # Lightweight experiment/evaluator namespaces satisfy MultiModelPlotter without loading checkpoints.
     experiment = SimpleNamespace(
         MODEL_NAMES=pair,
         EMBEDDING_DIM=embedding_dim,
@@ -141,7 +151,7 @@ def redraw_multi(
     plotter = MultiModelPlotter(evaluator_context)
     written: list[Path] = []
 
-    # Each independently evaluated true-model trajectory receives its own grid.
+    # Render one 4x4 + Procrustes grid per saved true-model generalization archive.
     for saved_path in sorted(
         saved_directory.glob("multimodel_generalization_*_4x4.npz")
     ):
@@ -189,8 +199,7 @@ def redraw_multi(
     with np.load(held_out_path, allow_pickle=False) as arrays:
         stored = {key: arrays[key].copy() for key in arrays.files}
 
-    # The source evaluator counts samples after ten expanding-window slices.
-    # Preserve this label accounting when reconstructing the chart legend.
+    # Replicate the 10-window-per-trajectory sample count expected by the joint-space legend.
     sample_labels = []
     for trajectory_id in np.unique(stored["trajectory_ids"]):
         labels = stored["true_labels"][stored["trajectory_ids"] == trajectory_id]
@@ -204,6 +213,7 @@ def redraw_multi(
     if first.ndim != 2 or second.ndim != 2 or not len(first) or not len(second):
         return written
 
+    # Compute directed nearest-neighbor distances in full d_e space and on unit-normed vectors.
     distances_ab = cKDTree(second).query(first, k=1)[0]
     distances_ba = cKDTree(first).query(second, k=1)[0]
     unit_first = first / np.maximum(
@@ -236,10 +246,11 @@ def redraw_multi(
 
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse saved-data-only selectors and output roots.
+    """
+    Parse command-line selectors for experiment family, models/pairs, embedding dim, and roots.
 
-    :param list[str] | None argv: Optional command-line arguments for testing.
-    :return argparse.Namespace: Selected models, dimensions, and source folders.
+    :param list[str] | None argv: Optional argument list; defaults to `sys.argv[1:]` when None.
+    :return argparse.Namespace: Parsed configuration options for figure regeneration.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -270,10 +281,11 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Regenerate selected graphics from previously serialized trajectories.
+    """
+    Dispatch figure regeneration across requested single, dual, and multi-model experiments.
 
-    :param list[str] | None argv: Optional argument list for scripted execution.
-    :return None: Paths of the regenerated figures are printed to the console.
+    :param list[str] | None argv: Optional CLI argument list for programmatic or test invocation.
+    :return None: Prints generated output file paths to stdout.
     """
     args = parse_arguments(argv)
     families = (

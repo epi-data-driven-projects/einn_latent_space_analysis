@@ -1,33 +1,53 @@
+"""
+Forward pass and derivative computation engine for multi-model EINN training.
+
+Routes batches by epidemiological model label to model-specific TimeModules and ODE
+models, enforces structural dummy compartments in normalized state space, extends the
+time grid into the extrapolation horizon for Phases 2-4, computes autograd Time-branch
+derivatives, and evaluates the Feature-branch gradient trick in Phase 4 (thesis
+Sections 2.2 and 2.4).
+"""
 import torch
 
-from einn_multimodel.config.einn_train_config import EINNTrainConfig
 from einn.data.data_scaling_stats import DataScalingStats
+from einn_multimodel.config.einn_train_config import EINNTrainConfig
+from einn_multimodel.model.interface.einn_models import EINNModels
 from einn_multimodel.model.interface.network_outputs import NetworkOutputs
 from einn_multimodel.model.interface.phase_context import PhaseContext
 
 
 class EINNForwardEngine:
-    """EINN forward engine routing samples by true model in true-only mode."""
+    """
+    Phase-aware forward engine for multi-model EINN training.
 
-    def __init__(self, train_config: EINNTrainConfig, scaling_stats: DataScalingStats):
-        """Initialize EINNForwardEngine to produce states, embeddings, and model derivatives for the selected training phase.
+    Computes normalized states and latent embeddings for the Time and Feature branches,
+    converts derivatives between normalized and physical units via training-fitted scaling
+    statistics, and applies the chain-rule gradient trick on Feature embeddings in Phase 4
+    (thesis Section 2.2).
+    """
 
-
-        :param EINNTrainConfig train_config: Optimization settings for the training phases.
-        :param DataScalingStats scaling_stats: Statistics fitted on training data for physical-domain conversion.
-        :return None: No return value; state or serialized artifacts are updated in place.
+    def __init__(self, train_config: EINNTrainConfig, scaling_stats: DataScalingStats) -> None:
         """
-        self.config = train_config
-        self.scaling_stats = scaling_stats
+        Store training hyperparameters and training-fitted scaling statistics.
+
+        :param EINNTrainConfig train_config: Training configuration providing future_steps and device.
+        :param DataScalingStats scaling_stats: Training-fitted temporal bounds (t_min, t_max)
+            and compartment statistics (aux_mean, aux_std) for unit conversion.
+        """
+        self.config: EINNTrainConfig = train_config
+        self.scaling_stats: DataScalingStats = scaling_stats
 
     @staticmethod
     def _get_jacobian_rows(outputs: torch.Tensor, inputs: torch.Tensor) -> list[torch.Tensor]:
-        """Perform get jacobian rows as part of produce states, embeddings, and model derivatives for the selected training phase.
+        """
+        Compute row-wise gradients d(outputs[..., k])/d(inputs) for each last-axis channel k.
 
+        Retains higher-order graph connectivity (create_graph=True, retain_graph=True) so
+        derivatives remain differentiable with respect to network parameters and inputs.
 
-        :param torch.Tensor outputs: Forward-pass predictions, latent tensors, and derivative containers.
-        :param torch.Tensor inputs: Input tensors supplied to the active neural-network module.
-        :return list[torch.Tensor]: Collection of the generated results in their original order.
+        :param torch.Tensor outputs: Output tensor of shape (..., C) to differentiate.
+        :param torch.Tensor inputs: Differentiable input tensor of shape (..., D) with requires_grad=True.
+        :return list[torch.Tensor]: List of C gradient tensors, each matching inputs.shape.
         """
         gradients = []
         for feature_idx in range(outputs.shape[-1]):
@@ -49,12 +69,13 @@ class EINNForwardEngine:
     def _compute_empirical_derivatives(
         self, outputs: torch.Tensor, time_tensor: torch.Tensor
     ) -> torch.Tensor:
-        """Perform compute empirical derivatives as part of produce states, embeddings, and model derivatives for the selected training phase.
+        """
+        Compute exact autograd derivatives d(outputs)/d(time_tensor) across all output channels.
 
-
-        :param torch.Tensor outputs: Forward-pass predictions, latent tensors, and derivative containers.
-        :param torch.Tensor time_tensor: Time-coordinate tensor passed to the differentiable network.
-        :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+        :param torch.Tensor outputs: Differentiable tensor of shape (B, T_total, C).
+        :param torch.Tensor time_tensor: Normalized time tensor of shape (B, T_total, 1)
+            with requires_grad=True.
+        :return torch.Tensor: Derivative tensor of shape (B, T_total, C) with respect to time_tensor.
         """
         return torch.cat(self._get_jacobian_rows(outputs, time_tensor), dim=-1)
 
@@ -64,13 +85,17 @@ class EINNForwardEngine:
         embedding: torch.Tensor,
         de_dt: torch.Tensor,
     ) -> torch.Tensor:
-        """Perform compute feature gradient trick as part of produce states, embeddings, and model derivatives for the selected training phase.
+        """
+        Approximate d(s_F)/dt via the EINN gradient trick: J_out(e_F) * d(e_T)/dt.
 
+        Multiplies each row of the OutputModule Jacobian J_out(e_t^F) = d(s_t^F)/d(e_t^F) by the
+        Time-branch latent derivative d(e_t^T)/dt along the embedding axis d_e (thesis Section 2.2).
 
-        :param torch.Tensor states: Current compartment populations in model state order.
-        :param torch.Tensor embedding: Latent feature tensor to project into epidemiological state space.
-        :param torch.Tensor de_dt: Time derivative of the latent embedding representation.
-        :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+        :param torch.Tensor states: Feature-branch output states s_t^F of shape (B, T_total, d_s).
+        :param torch.Tensor embedding: Differentiable Feature embeddings e_t^F of shape (B, T_total, d_e).
+        :param torch.Tensor de_dt: Time-branch embedding derivative d(e_t^T)/dt in physical time
+            units, of shape (B, T_total, d_e).
+        :return torch.Tensor: Projected Feature state derivatives of shape (B, T_total, d_s).
         """
         ds_de_rows = self._get_jacobian_rows(states, embedding)
         return torch.cat(
@@ -79,11 +104,13 @@ class EINNForwardEngine:
 
     @staticmethod
     def _labels(context: PhaseContext) -> torch.Tensor:
-        """Perform labels as part of produce states, embeddings, and model derivatives for the selected training phase.
+        """
+        Extract and validate per-sample integer model labels of shape (B,) from PhaseContext.
 
-
-        :param PhaseContext context: Current optimization-phase input tensors, masks, and model modules.
-        :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+        :param PhaseContext context: Current step context containing true_model_label and models.
+        :return torch.Tensor: Validated int64 model ID tensor of shape (B,).
+        :raises ValueError: If true_model_label is missing for a multi-model run or contains
+            unknown model IDs outside context.models.model_to_id.
         """
         labels = context.true_model_label
         if labels is None:
@@ -103,15 +130,15 @@ class EINNForwardEngine:
         return labels
 
     def _route_time_modules(
-        self, models, labels: torch.Tensor, t: torch.Tensor
+        self, models: EINNModels, labels: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """Perform route time modules as part of produce states, embeddings, and model derivatives for the selected training phase.
+        """
+        Route each batch sample to its corresponding model-specific TimeModule.
 
-
-        :param Any models: The models containing the time, feature, output, and ODE modules.
-        :param torch.Tensor labels: Class identifiers assigned to the samples being compared.
-        :param torch.Tensor t: Time coordinates of the modeled trajectory.
-        :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+        :param EINNModels models: Multi-model EINN container holding time_modules and model_to_id.
+        :param torch.Tensor labels: Integer model IDs of shape (B,).
+        :param torch.Tensor t: Normalized time grid of shape (B, T_total, 1).
+        :return torch.Tensor: Routed Time-branch embeddings e_t^T of shape (B, T_total, d_e).
         """
         embedding_dim = models.feature_module.decoder.dim_out
         result = t.new_zeros((t.size(0), t.size(1), embedding_dim))
@@ -126,19 +153,21 @@ class EINNForwardEngine:
 
     def _route_ode_models(
         self,
-        models,
+        models: EINNModels,
         labels: torch.Tensor,
         states_real: torch.Tensor,
         detach_params: bool,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Perform route ode models as part of produce states, embeddings, and model derivatives for the selected training phase.
+        """
+        Route physical-domain compartment states to each sample's assigned ODE model RHS.
 
-
-        :param Any models: The models containing the time, feature, output, and ODE modules.
-        :param torch.Tensor labels: Class identifiers assigned to the samples being compared.
-        :param torch.Tensor states_real: Predicted epidemiological compartment states in physical units.
-        :param bool detach_params: Whether ODE parameters should be detached from the gradient graph.
-        :return tuple[torch.Tensor, dict[str, torch.Tensor]]: Computed result in the configured output representation.
+        :param EINNModels models: Multi-model EINN container holding ode_models and model_to_id.
+        :param torch.Tensor labels: Integer model IDs of shape (B,).
+        :param torch.Tensor states_real: Compartment states in physical units of shape (B, T_total, d_s).
+        :param bool detach_params: If True, detaches ODE parameters before RHS evaluation
+            (used in Phase 4 when fine-tuning ODE parameters/OutputModule against Feature derivatives).
+        :return tuple[torch.Tensor, dict[str, torch.Tensor]]: Pair (ds_dt_ode_real, params_by_model)
+            with physical RHS derivatives of shape (B, T_total, d_s) and per-model parameter tensors.
         """
         derivative_result = torch.zeros_like(states_real)
         params_by_model: dict[str, torch.Tensor] = {}
@@ -159,19 +188,24 @@ class EINNForwardEngine:
     def _enforce_dummy_states(
         states_normalized: torch.Tensor,
         labels: torch.Tensor,
-        models,
+        models: EINNModels,
         aux_mean: torch.Tensor,
         aux_std: torch.Tensor,
     ) -> torch.Tensor:
-        """Perform enforce dummy states as part of produce states, embeddings, and model derivatives for the selected training phase.
+        """
+        Set structural dummy compartments to their standardized physical zero value in normalized space.
 
+        Converts physical 0.0 via (0.0 - aux_mean[idx]) / aux_std[idx] so padded compartments
+        (such as E in SIR-SEIR or the third channel in SIR-SIS) remain constant across time
+        (thesis Section 2.4).
 
-        :param torch.Tensor states_normalized: Predicted epidemiological state vectors in normalized coordinates.
-        :param torch.Tensor labels: Class identifiers assigned to the samples being compared.
-        :param Any models: The models containing the time, feature, output, and ODE modules.
-        :param torch.Tensor aux_mean: Training-set means used to standardize the auxiliary compartments.
-        :param torch.Tensor aux_std: Training-set scale factors for auxiliary compartment normalization.
-        :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+        :param torch.Tensor states_normalized: Normalized compartment states of shape (B, T_total, d_s).
+        :param torch.Tensor labels: Integer model IDs of shape (B,).
+        :param EINNModels models: Multi-model EINN container exposing ode_models and model_to_id.
+        :param torch.Tensor aux_mean: Z-score means of shape (d_s,).
+        :param torch.Tensor aux_std: Z-score standard deviations of shape (d_s,).
+        :return torch.Tensor: Cloned normalized state tensor of shape (B, T_total, d_s) with
+            dummy compartments fixed.
         """
         states = states_normalized.clone()
         for name, model in models.ode_models.items():
@@ -187,11 +221,19 @@ class EINNForwardEngine:
         return states
 
     def forward(self, context: PhaseContext) -> NetworkOutputs:
-        """Evaluate produce states, embeddings, and model derivatives for the selected training phase for batched inputs.
+        """
+        Execute the phase-dependent EINN forward pass and return states, embeddings, and derivatives.
 
+        Extends the time horizon by config.future_steps in Phases 2-4 to evaluate future ODE
+        residuals, computes Time-branch autograd derivatives in Phases 2-4, runs FeatureModule
+        and Feature-branch decoding in Phases 3-4, and computes the Feature gradient-trick ODE
+        residuals in Phase 4 (thesis Sections 2.2 and 2.4).
 
-        :param PhaseContext context: Current optimization-phase input tensors, masks, and model modules.
-        :return NetworkOutputs: Computed result in the configured output representation.
+        :param PhaseContext context: Current step context with phase_num, batch tensors, and labels.
+        :return NetworkOutputs: Populated forward-pass outputs for the active training phase.
+        :raises ValueError: If context.t shape does not match (B, full_steps, 1), or if
+            future_steps / time_step assumptions are invalid in Phases 2-4.
+        :raises RuntimeError: If future ODE derivative tensors do not have length future_steps.
         """
         out = NetworkOutputs()
         models = context.models
@@ -206,11 +248,8 @@ class EINNForwardEngine:
                 f"got X={tuple(x_input.shape)} and t={tuple(t_raw.shape)}."
             )
 
-        # The expanding-window loader retains all `full_steps` input/target
-        # time indices, even when the observed X prefix is shorter.  The
-        # future ODE objectives must use NEW time indices after this grid.
-        # Without this extension, ds_dt[:, full_steps:] is always empty and
-        # ode_future_T / ode_future_F silently become exact zero.
+        # Extend time coordinates past full_steps in Phases 2-4 so extrapolation ODE losses
+        # operate on unseen future timesteps rather than an empty slice.
         if context.phase_num >= 2:
             future_steps = int(self.config.future_steps)
             if future_steps <= 0:
@@ -227,8 +266,9 @@ class EINNForwardEngine:
                 1, future_steps + 1, device=t_raw.device, dtype=t_raw.dtype
             ).view(1, -1, 1)
             future_t_raw = t_raw[:, -1:, :] + time_step * increments
-            t_raw = torch.cat((t_raw, future_t_raw), dim=1)
+            t_raw = torch.cat((t_raw, future_t_raw), dim=1)  # Shape: (B, full_steps + future_steps, 1)
 
+        # Normalize time coordinates into [0, 1] and enable autograd for Time-branch derivatives.
         aux_mean = self.scaling_stats.aux_mean.to(t_raw.device)
         aux_std = self.scaling_stats.aux_std.to(t_raw.device)
         t_min = self.scaling_stats.t_min.to(t_raw.device)
@@ -236,14 +276,14 @@ class EINNForwardEngine:
         t_range = (t_max - t_min).clamp_min(1e-8)
         t_scaled = ((t_raw - t_min) / t_range).requires_grad_(True)
 
-        # Use the TRUE label to select the Time Module and the ODE model.
-        # All original EINN embeddings are passed directly to OutputModule.
+        # Route each sample to its model-specific TimeModule -> e_t^T (B, T_total, d_e) -> s_t^T (B, T_total, d_s).
         e_t_full = self._route_time_modules(models, labels, t_scaled)
         s_t_full = models.output_module(e=e_t_full)
         s_t_full = self._enforce_dummy_states(
             s_t_full, labels, models, aux_mean, aux_std
         )
 
+        # Convert autograd derivative d(s_t^T)/d(t_scaled) to physical time units and compare with ODE RHS.
         ds_dt_t_norm = self._compute_empirical_derivatives(s_t_full, t_scaled)
         ds_dt_t_nn = ds_dt_t_norm / t_range
         s_t_real = s_t_full * aux_std + aux_mean
@@ -266,6 +306,7 @@ class EINNForwardEngine:
                     f"{out.ds_dt_future_T_nn.shape[1]} != {future_steps}."
                 )
 
+        # Phases 3-4: Run shared FeatureModule on historical x and query times t_scaled.
         if context.phase_num >= 3:
             feature_outputs = models.feature_module(
                 x=x_input,
@@ -275,6 +316,7 @@ class EINNForwardEngine:
             )
             e_t_f_full = feature_outputs.embeddings
             if context.phase_num == 4:
+                # Freeze FeatureModule embeddings during Phase 4 ODE/OutputModule fine-tuning.
                 e_t_f_full = e_t_f_full.detach()
             s_t_f_full = models.output_module(e=e_t_f_full)
             s_t_f_full = self._enforce_dummy_states(
@@ -284,8 +326,8 @@ class EINNForwardEngine:
             out.e_t_F = e_t_f_full[:, :full_steps]
             out.s_t_F = s_t_f_full[:, :full_steps]
 
+        # Phase 4: Evaluate Feature-branch ODE residuals using the EINN gradient trick (Section 2.2).
         if context.phase_num == 4:
-            # Original EINN gradient trick on the unprojected embeddings.
             de_dt_norm = self._compute_empirical_derivatives(e_t_full, t_scaled)
             de_dt = de_dt_norm / t_range
             e_t_f_grad = e_t_f_full.clone().detach().requires_grad_(True)

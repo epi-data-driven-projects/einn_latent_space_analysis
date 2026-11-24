@@ -1,83 +1,66 @@
-
-"""True-model-only two-model EINN experiment with single-model-style 4x4 reports.
-
-What this adds compared to the original script:
-- configurable EMBEDDING_DIM, OBSERVATION_WINDOWS, PCA_COMPONENTS_TO_SHOW
-- two extra figures after training/evaluation:
-  one 4x4 figure for a held-out trajectory of model_1,
-  one 4x4 figure for a held-out trajectory of model_2
-- each row = one observation window
-- columns: prediction, PCA explained variance, shared PCA 2D, cosine similarity
-- Procrustes values appear in a full-width bar chart below the 4x4 grid
-- an additional figure shows ALL independent held-out trajectories in one common
-  PCA space (model-colored curves), with original-dimensional Hausdorff metrics
-- plotting style exactly follows the single-model 4x4 reference
-- saved figures: PNG and vector PDF; numeric results: CSV and NPZ
-
-Time Module routing: models.time_modules[true_model_name], as in the
-included model builder. No classifier is used for unknown model labels.
 """
+Two-model EINN experiment script with per-window 4x4 generalization and joint Hausdorff reports.
 
+Configures and runs a true-model-only two-model EINN experiment (SIR/SIS or SIR/SEIR)
+with SupConLoss, saves preprocessed training and held-out trajectories plus scaling
+parameters for reproducibility audits, trains and persists checkpoints/metrics via
+EINNTrainer and TrainingPostProcessor, and delegates 4x4 and joint latent-space report
+generation to FeatureOnlyEvaluator.
+"""
 import csv
 import logging
 import os
-from pathlib import Path
+from typing import Any
 
 import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
-from matplotlib.ticker import MaxNLocator, FuncFormatter
 import numpy as np
+from scipy.spatial import cKDTree
 import torch
-from scipy.spatial import procrustes, cKDTree
-from sklearn.decomposition import PCA
-from sklearn.metrics import davies_bouldin_score, silhouette_score
 
 from einn_multimodel.config.einn_model_config import EINNModelConfig
 from einn_multimodel.config.einn_train_config import EINNTrainConfig
 from einn_multimodel.data.multi_model_input_loader import MultiModelInputLoader
+from einn_multimodel.inference.feature_only_evaluator import FeatureOnlyEvaluator
 from einn_multimodel.inference.training_post_processor import TrainingPostProcessor
-from einn_multimodel.inference.inference_engine import InferenceEngine
 from einn_multimodel.model.einn_builder import EINNBuilder
 from einn_multimodel.training.einn_trainer import EINNTrainer
 
+matplotlib.use("Agg")
 
 # =====================================================================
 # EXPERIMENT CONFIGURATION
 # =====================================================================
 
-SEED = 42
-MODEL_NAMES = ("SIR", "SIS")   # or ("SIR", "SIS")
-TRAIN_STATES_PER_MODEL = 100
-TEST_STATES_PER_MODEL = 20
-SEQ_LEN = 200
-NOISE_STD = 0.01
-EPOCHS = 5
-BATCH_SIZE = 32
-DEVICE = "cuda:1"
+SEED: int = 42
+MODEL_NAMES: tuple[str, str] = ("SIR", "SIS")   # Supported pairs: ("SIR", "SIS") or ("SIR", "SEIR").
+TRAIN_STATES_PER_MODEL: int = 100
+TEST_STATES_PER_MODEL: int = 20
+SEQ_LEN: int = 200
+NOISE_STD: float = 0.01
+EPOCHS: int = 5
+BATCH_SIZE: int = 32
+DEVICE: str = "cuda:1"
 
-EMBEDDING_DIM = 20                 # 5 or 20
-OBSERVATION_WINDOWS = (10, 18, 40, 80)
-PCA_COMPONENTS_TO_SHOW = 8
+EMBEDDING_DIM: int = 20                 # Latent embedding dimension d_e (e.g. 5 or 20).
+OBSERVATION_WINDOWS: tuple[int, ...] = (10, 18, 40, 80)
+PCA_COMPONENTS_TO_SHOW: int = 8
 
-NORMALIZATION_MODES = (False,)
-FEATURE_LABEL_CONDITIONING_MODES = (True,)
-OUTPUT_ROOT = f"./outputs/{'_'.join(n.lower() for n in MODEL_NAMES)}_generalization_4x4"
+NORMALIZATION_MODES: tuple[bool, ...] = (False,)
+FEATURE_LABEL_CONDITIONING_MODES: tuple[bool, ...] = (True,)
+OUTPUT_ROOT: str = f"./outputs/{'_'.join(n.lower() for n in MODEL_NAMES)}_generalization_4x4"
 
-PARAM_CALIBRATION = {
+PARAM_CALIBRATION: dict[str, dict[str, float]] = {
     "SIR": {"beta": 0.4, "gamma": 0.1},
     "SIS": {"beta": 0.4, "gamma": 0.1},
     "SEIR": {"beta": 0.4, "alpha": 0.2, "gamma": 0.1},
 }
-MODEL_PARAM_RANGES = {
+MODEL_PARAM_RANGES: dict[str, dict[str, tuple[float, float]]] = {
     "SIR": {"beta": (0.0, 1.0), "gamma": (0.0, 1.0)},
     "SIS": {"beta": (0.0, 1.0), "gamma": (0.0, 1.0)},
     "SEIR": {"beta": (0.0, 1.0), "alpha": (0.0, 1.0), "gamma": (0.0, 1.0)},
 }
 
-LOSS_WEIGHTS = {
+LOSS_WEIGHTS: dict[str, float] = {
     "data_T": 4.0,
     "data_F": 4.0,
     "aux": 4.0,
@@ -99,7 +82,7 @@ LOSS_WEIGHTS = {
 # VISUAL STYLE
 # =====================================================================
 
-PALETTE = {
+PALETTE: dict[str, str] = {
     "ink": "#18283D",
     "muted": "#607185",
     "grid": "#D8E1EB",
@@ -112,23 +95,7 @@ PALETTE = {
     "gray": "#8192A6",
     "background_obs": "#E5F0F4",
 }
-PNG_DPI = 230
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+PNG_DPI: int = 230
 
 
 # =====================================================================
@@ -136,34 +103,42 @@ PNG_DPI = 230
 # =====================================================================
 
 def paired_cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Compute the row-wise cosine similarity between aligned latent vectors.
+    """
+    Compute row-wise cosine similarity between aligned embedding trajectories a and b.
 
+    Returns NaN at positions where either vector norm is at or below 1e-12 to avoid
+    division-by-zero instabilities.
 
-    :param np.ndarray a: First operand or trajectory in the numerical comparison.
-    :param np.ndarray b: Second operand or trajectory in the numerical comparison.
-    :return np.ndarray: Computed result in the configured output representation.
+    :param np.ndarray a: First embedding array of shape (T, D).
+    :param np.ndarray b: Second embedding array of shape (T, D) aligned row-wise with a.
+    :return np.ndarray: 1D cosine similarity array of shape (T,).
     """
     numer = np.sum(a * b, axis=1)
     denom = np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1)
     return np.divide(
-        numer, denom,
+        numer,
+        denom,
         out=np.full(a.shape[0], np.nan, dtype=float),
         where=denom > 1e-12,
     )
 
 
-def hausdorff_statistics(a: np.ndarray, b: np.ndarray) -> dict:
-    """Compute bidirectional nearest-neighbor distances and Hausdorff summaries.
-
-
-    :param np.ndarray a: First operand or trajectory in the numerical comparison.
-    :param np.ndarray b: Second operand or trajectory in the numerical comparison.
-    :return dict: Named tensors, metrics, or model components produced by this operation.
+def hausdorff_statistics(a: np.ndarray, b: np.ndarray) -> dict[str, float]:
     """
-    a = np.asarray(a, dtype=np.float64)
-    b = np.asarray(b, dtype=np.float64)
-    distance_a_to_b = cKDTree(b).query(a, k=1, workers=1)[0]
-    distance_b_to_a = cKDTree(a).query(b, k=1, workers=1)[0]
+    Compute symmetric, directed, 95th-percentile, and mean nearest-neighbor Hausdorff metrics.
+
+    Evaluates Euclidean nearest-neighbor distances in the original embedding space R^D
+    using `scipy.spatial.cKDTree`.
+
+    :param np.ndarray a: Point cloud array of shape (N_a, D) for model class A.
+    :param np.ndarray b: Point cloud array of shape (N_b, D) for model class B.
+    :return dict[str, float]: Dictionary with keys 'hausdorff', 'directed_a_to_b',
+        'directed_b_to_a', 'hausdorff_p95', 'mean_nn_a_to_b', and 'mean_nn_b_to_a'.
+    """
+    a_arr = np.asarray(a, dtype=np.float64)
+    b_arr = np.asarray(b, dtype=np.float64)
+    distance_a_to_b = cKDTree(b_arr).query(a_arr, k=1, workers=1)[0]
+    distance_b_to_a = cKDTree(a_arr).query(b_arr, k=1, workers=1)[0]
     directed_ab = float(distance_a_to_b.max())
     directed_ba = float(distance_b_to_a.max())
     return {
@@ -180,11 +155,12 @@ def hausdorff_statistics(a: np.ndarray, b: np.ndarray) -> dict:
 
 
 def extract_embeddings(output: object) -> torch.Tensor:
-    """Retrieve extract embeddings from the configured model or saved dataset.
+    """
+    Extract a latent embedding tensor from a FeatureModuleOutputs object or raw Tensor.
 
-
-    :param object output: Network predictions or output container used by this operation.
-    :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+    :param object output: FeatureModule forward return value or direct torch.Tensor.
+    :return torch.Tensor: Latent embedding tensor of shape (B, T, d_e).
+    :raises TypeError: If neither `output.embeddings` nor `output` itself is a torch.Tensor.
     """
     embeddings = getattr(output, "embeddings", output)
     if not isinstance(embeddings, torch.Tensor):
@@ -193,20 +169,14 @@ def extract_embeddings(output: object) -> torch.Tensor:
 
 
 # =====================================================================
-# EVALUATOR
-# =====================================================================
-
-
-
-# =====================================================================
 # EXPERIMENT ENTRY POINT
 # =====================================================================
 
-def reset_seeds():
-    """Reset all available numerical random generators to the experiment seed.
+def reset_seeds() -> None:
+    """
+    Reset NumPy and PyTorch CPU/CUDA random seeds to the configured experiment SEED.
 
-
-    :return Any: The computed objects, metrics, or artifact paths for the requested operation.
+    :return None: Seeds random number generators in place.
     """
     np.random.seed(SEED)
     torch.manual_seed(SEED)
@@ -214,21 +184,35 @@ def reset_seeds():
         torch.cuda.manual_seed_all(SEED)
 
 
-def run_experiment():
-    """Train, evaluate, and save the selected epidemiological model experiment.
+def run_experiment() -> None:
+    """
+    Execute the two-model EINN data preparation, training, checkpoint export, and reporting pipeline.
 
+    Validates model pair and observation window settings, generates and caches preprocessed
+    training and held-out datasets, trains across configured conditioning/normalization modes,
+    persists checkpoints and metrics, runs FeatureOnlyEvaluator reports, and writes a CSV summary.
 
-    :return Any: The computed objects, metrics, or artifact paths for the requested operation.
+    :return None: Saves datasets, model weights, metrics, figures, and run_summary.csv to disk.
+    :raises ValueError: If OBSERVATION_WINDOWS, EMBEDDING_DIM, PCA_COMPONENTS_TO_SHOW, or
+        MODEL_NAMES are invalid.
     """
     logging.basicConfig(level=logging.INFO)
     reset_seeds()
-    if len(OBSERVATION_WINDOWS) != 4 or list(OBSERVATION_WINDOWS) != sorted(set(OBSERVATION_WINDOWS)) or not all(1 <= n < SEQ_LEN for n in OBSERVATION_WINDOWS):
+
+    if (
+        len(OBSERVATION_WINDOWS) != 4
+        or list(OBSERVATION_WINDOWS) != sorted(set(OBSERVATION_WINDOWS))
+        or not all(1 <= n < SEQ_LEN for n in OBSERVATION_WINDOWS)
+    ):
         raise ValueError("Exactly four increasing observation windows, each < SEQ_LEN, are needed.")
-    if not 2 <= EMBEDDING_DIM or PCA_COMPONENTS_TO_SHOW < 1:
+    if EMBEDDING_DIM < 2 or PCA_COMPONENTS_TO_SHOW < 1:
         raise ValueError("Use EMBEDDING_DIM >= 2 and PCA_COMPONENTS_TO_SHOW >= 1.")
+
     names = tuple(name.upper() for name in MODEL_NAMES)
     if set(names) not in ({"SIR", "SIS"}, {"SIR", "SEIR"}):
         raise ValueError("Choose MODEL_NAMES = ('SIR','SIS') or ('SIR','SEIR').")
+
+    # Configure unified compartment/parameter dimensions and initial states for the selected pair.
     is_sir_sis = set(names) == {"SIR", "SIS"}
     d_s = 3 if is_sir_sis else 4
     d_p = 2 if is_sir_sis else 3
@@ -243,6 +227,7 @@ def run_experiment():
         loss_weights=LOSS_WEIGHTS.copy(),
     )
 
+    # 1. Prepare training and held-out datasets using scaling statistics fitted on training data.
     data_loader = MultiModelInputLoader(device=DEVICE, seed=SEED)
     train_dataset, scaling_stats = data_loader.prepare_training_data(
         num_states_per_model=TRAIN_STATES_PER_MODEL,
@@ -270,12 +255,12 @@ def run_experiment():
         scaling_stats=scaling_stats,
     )
 
-    # Save the complete preprocessed trajectories before window expansion so
-    # held-out tests can be audited without generating new random realizations.
+    # Persist unexpanded trajectories, labels, and fitted scalers for offline reproducibility audits.
     os.makedirs(OUTPUT_ROOT, exist_ok=True)
-    stored_trajectories = {}
+    stored_trajectories: dict[str, Any] = {}
     for subset_name, dataset in (
-        ("training", train_dataset), ("held_out", test_dataset),
+        ("training", train_dataset),
+        ("held_out", test_dataset),
     ):
         for source_name, values in (
             ("inputs", dataset.x_list),
@@ -302,7 +287,8 @@ def run_experiment():
         **stored_trajectories,
     )
 
-    results = []
+    # 2. Train, save artifacts, and generate evaluation reports for each configured variant.
+    results: list[dict[str, Any]] = []
     for condition_feature_on_true_label in FEATURE_LABEL_CONDITIONING_MODES:
         for normalize_feature in NORMALIZATION_MODES:
             reset_seeds()
@@ -355,8 +341,8 @@ def run_experiment():
                 "output_dir": output_dir,
             })
 
+    # 3. Write summary table of all executed experiment configurations.
     with open(os.path.join(OUTPUT_ROOT, "run_summary.csv"), "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
         writer.writeheader()
         writer.writerows(results)
-

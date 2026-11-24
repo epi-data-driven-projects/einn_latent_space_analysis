@@ -11,7 +11,8 @@ class ExperimentUtils:
     """
     @staticmethod
     def seed_everything(seed: int = 42):
-        """Globally fixes all random number generators to ensure 100% reproducibility.
+        """
+        Globally fixes all random number generators to ensure 100% reproducibility.
 
         :param int seed: The seed value to use across all libraries.
 

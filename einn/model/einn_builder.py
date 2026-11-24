@@ -28,7 +28,8 @@ class EINNBuilder:
         population_n: float | None = 1.0,
         seed: int = 42
     ) -> EINNModels:
-        """Builds and returns the EINNModels container based on the provided configurations.
+        """
+        Builds and returns the EINNModels container based on the provided configurations.
 
         :param EINNModelConfig model_config: The configuration object for neural architectures.
         :param EINNTrainConfig train_config: The configuration object for training (used for device).

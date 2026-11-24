@@ -1,3 +1,13 @@
+"""
+Mechanistic Susceptible-Infected-Susceptible (SIS) ODE model for multi-model EINN runs.
+
+Formulates SIS dynamics in a three-compartment layout [S, I, R_dummy] compatible with
+the shared SIR-SIS OutputModule (d_s = 3, target_idx = 1), treating index 2 as a fixed
+zero dummy state and leaving monotonicity unconstrained because reinfection permits
+non-monotonic S(t) and I(t) trajectories (thesis Section 2.4).
+"""
+from typing import Any
+
 import torch
 from torch import nn
 
@@ -6,28 +16,41 @@ from einn.ode.base_ode_model import BaseODEModel
 
 
 class SISModel(BaseODEModel):
-    """Susceptible-Infected-Susceptible model with a fixed dummy R state."""
+    """
+    Mechanistic SIS epidemiological ODE model with a zero-valued dummy third compartment.
 
-    def __init__(self, population_n: float = 1.0, target_idx: int = 1):
-        """Initialize SISModel to evaluate the susceptible-infected-susceptible mechanistic ODE system.
+    Evolves susceptible S (index 0) and infected I (index 1) with transmission rate beta
+    and recovery/re-susceptibility rate gamma, while keeping index 2 fixed at zero derivative
+    (dummy_state_indices = (2,)) to align with SIR's three-compartment state space.
+    """
 
+    def __init__(self, population_n: float = 1.0, target_idx: int = 1) -> None:
+        """
+        Initialize the SIS ODE model, dummy-state mask, and monotonicity metadata.
 
-        :param float population_n: Total modeled population, or one for population-fraction states.
-        :param int target_idx: Index of the epidemiological target compartment.
-        :return None: No return value; state or serialized artifacts are updated in place.
+        :param float population_n: Total population N (1.0 when states represent population fractions).
+        :param int target_idx: Index of the target epidemiological compartment (default 1 for I).
+        :return None: Initializes base state dimension d_s = 3, dummy_state_indices, and monotonicity metadata.
         """
         super().__init__(d_s=3, target_idx=target_idx)
-        self.population_n = float(population_n)
-        self.dummy_state_indices = (2,)
-        # In SIS, S need not be globally monotone: recovered individuals return to S.
-        self.monotonicity_indices = {"decreasing": [], "increasing": []}
+        self.population_n: float = float(population_n)
 
-    def init_params(self, param_dict: dict) -> None:
-        """Perform init params as part of evaluate the susceptible-infected-susceptible mechanistic ODE system.
+        # Index 2 is a fixed zero padding channel for compatibility with d_s = 3 in SIR-SIS runs.
+        self.dummy_state_indices: tuple[int, ...] = (2,)
 
+        # Reinfection allows S to increase after declining, so global monotonicity is not enforced.
+        self.monotonicity_indices: dict[str, list[int]] = {
+            "decreasing": [],
+            "increasing": [],
+        }
 
-        :param dict param_dict: Named initial guesses for the biological parameters.
-        :return None: No return value; state or serialized artifacts are updated in place.
+    def init_params(self, param_dict: dict[str, Any]) -> None:
+        """
+        Initialize unbounded raw learnable parameters from bounded biological (beta, gamma) guesses.
+
+        :param dict[str, Any] param_dict: Initial parameter dictionary supporting 'beta'
+            (default 0.4) and 'gamma' (default 0.1).
+        :return None: Registers self.raw_params of shape (2,) as a trainable nn.Parameter.
         """
         beta_raw = self._inverse_tanh_init(float(param_dict.get("beta", 0.4)))
         gamma_raw = self._inverse_tanh_init(float(param_dict.get("gamma", 0.1)))
@@ -36,18 +59,24 @@ class SISModel(BaseODEModel):
         )
 
     def forward(self, states: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        """Evaluate evaluate the susceptible-infected-susceptible mechanistic ODE system for batched inputs.
+        """
+        Evaluate the SIS ODE right-hand side f_ODE(s, (beta, gamma)).
 
+        Computes:
+        dS/dt = -beta * S * I / N + gamma * I,
+        dI/dt = beta * S * I / N - gamma * I,
+        dR_dummy/dt = 0.
 
-        :param torch.Tensor states: Current compartment populations in model state order.
-        :param torch.Tensor params: Mechanistic model parameters in the documented parameter order.
-        :return torch.Tensor: Tensor containing the computed model outputs or time derivatives.
+        :param torch.Tensor states: Compartment state tensor of shape (..., 3) ordered as [S, I, dummy].
+        :param torch.Tensor params: Bounded parameter tensor of shape (..., 2) ordered as [beta, gamma].
+        :return torch.Tensor: Time-derivative tensor ds/dt of shape (..., 3).
         """
         beta = params[..., 0:1]
         gamma = params[..., 1:2]
         susceptible = states[..., 0:1]
         infected = states[..., 1:2]
 
+        # Infection moves individuals S -> I; recovery returns them immediately I -> S.
         infection = beta * susceptible * infected / self.population_n
         recovery = gamma * infected
 
@@ -57,12 +86,12 @@ class SISModel(BaseODEModel):
         return torch.cat((ds_dt, di_dt, dr_dt), dim=-1)
 
     def get_derivatives(self, states: torch.Tensor, detach_params: bool) -> ODESolution:
-        """Retrieve get derivatives from the configured model or saved dataset.
+        """
+        Retrieve bounded parameters and evaluate SIS ODE time derivatives for the given states.
 
-
-        :param torch.Tensor states: Current compartment populations in model state order.
-        :param bool detach_params: Whether ODE parameters should be detached from the gradient graph.
-        :return ODESolution: Computed result in the configured output representation.
+        :param torch.Tensor states: Compartment state tensor of shape (..., 3).
+        :param bool detach_params: If True, detaches scaled parameters from the autograd graph.
+        :return ODESolution: Dataclass containing ds_dt of shape (..., 3) and params of shape (..., 2).
         """
         params = self.get_scaled_params(detach=detach_params)
         return ODESolution(

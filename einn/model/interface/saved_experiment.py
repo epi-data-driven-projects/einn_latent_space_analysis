@@ -7,22 +7,22 @@ import numpy as np
 class Experiment:
     """Experiment component of the original EINN implementation.
 
-    :param name: Name of the epidemiological model in the selected experiment.
-    :param dimension: Number of dimensions in the saved latent representations.
-    :param observations: Observed-prefix lengths used to produce the four report rows.
-    :param target: Clean synthetic target trajectory in the physical domain.
-    :param predictions: Feature-module predicted target trajectories for each observed prefix.
-    :param time_embeddings: Time-module representations over the full target horizon.
-    :param feature_embeddings: Feature-module representations over the full target horizon.
-    :param cosine: Time-aligned cosine similarities between Time and Feature representations.
-    :param pca_coords: Time-indexed Feature embeddings projected to the shared 2D PCA basis.
-    :param cumulative_variance: Cumulative explained variance of window-specific Feature PCA.
-    :param shared_variance_ratio: Proportion of variance captured by shared PCA components.
-    :param disparity: Centered and normalized Procrustes discrepancy by observation window.
-    :param mse_future: Prediction MSE restricted to the unobserved target horizon.
-    :param d95: Smallest number of PCs explaining at least 95 percent of variance.
-    :param d99: Smallest number of PCs explaining at least 99 percent of variance.
-    :param source: Path of the NPZ source used to construct the saved report.
+    :param str name: Name of the epidemiological model in the selected experiment.
+    :param int dimension: Number of dimensions in the saved latent representations.
+    :param np.ndarray observations: Observed-prefix lengths used to produce the four report rows.
+    :param np.ndarray target: Clean synthetic target trajectory in the physical domain.
+    :param np.ndarray predictions: Feature-module predicted target trajectories for each observed prefix.
+    :param np.ndarray time_embeddings: Time-module representations over the full target horizon.
+    :param np.ndarray feature_embeddings: Feature-module representations over the full target horizon.
+    :param np.ndarray cosine: Time-aligned cosine similarities between Time and Feature representations.
+    :param np.ndarray pca_coords: Time-indexed Feature embeddings projected to the shared 2D PCA basis.
+    :param np.ndarray cumulative_variance: Cumulative explained variance of window-specific Feature PCA.
+    :param np.ndarray shared_variance_ratio: Proportion of variance captured by shared PCA components.
+    :param np.ndarray disparity: Centered and normalized Procrustes discrepancy by observation window.
+    :param np.ndarray mse_future: Prediction MSE restricted to the unobserved target horizon.
+    :param np.ndarray d95: Smallest number of PCs explaining at least 95 percent of variance.
+    :param np.ndarray d99: Smallest number of PCs explaining at least 99 percent of variance.
+    :param np.ndarray str source: Path of the NPZ source used to construct the saved report.
     """
     name: str
     dimension: int

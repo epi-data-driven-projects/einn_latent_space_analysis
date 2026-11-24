@@ -48,6 +48,7 @@ class BaseODEModel(nn.Module, ABC):
 
         :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, d_s].
         :param bool detach_params: Whether to detach parameters from the computation graph.
+
         :return ODESolution: An object containing derivatives, scaled parameters, and time.
         """
         pass
@@ -57,6 +58,7 @@ class BaseODEModel(nn.Module, ABC):
         Scales the raw parameters into physically meaningful bounds (0 to 1) using the tanh trick.
 
         :param bool detach: If True, detaches the tensor from the autograd graph.
+
         :return torch.Tensor: Scaled parameter tensor bound between 0 and 1.
         """
         if self.raw_params is None:
@@ -74,6 +76,7 @@ class BaseODEModel(nn.Module, ABC):
         Assumes the forward scaling is: (tanh(x) + 1) / 2 = target_val.
 
         :param float target_val: The target physical value (must be strictly between 0 and 1).
+
         :return float: The unconstrained raw value to initialize the parameter with.
         """
         val_tensor = torch.tensor(data=target_val, dtype=torch.float32)

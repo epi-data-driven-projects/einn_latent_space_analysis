@@ -12,7 +12,8 @@ class SISModel(BaseODEModel):
     """
 
     def __init__(self, population_n: float = 1.0, target_idx: int = 1):
-        """Initializes the SIS model.
+        """
+        Initializes the SIS model.
 
         :param float population_n: Total population (N). Defaults to 1.0.
         :param int target_idx: Index for the observed target data (e.g., 1 for Infected).
@@ -29,7 +30,8 @@ class SISModel(BaseODEModel):
         }
 
     def init_params(self, param_dict: dict):
-        """Initializes the raw learnable parameters for beta and gamma using inverse tanh scaling.
+        """
+        Initializes the raw learnable parameters for beta and gamma using inverse tanh scaling.
 
         :param dict param_dict: Dictionary containing initial biological values.
                                 Expected keys: "beta", "gamma".
@@ -49,6 +51,7 @@ class SISModel(BaseODEModel):
 
         :param torch.Tensor states: Compartment states. Shape: [Batch, Seq_len, 2].
         :param torch.Tensor params: Physical parameters [beta, gamma]. Shape: [Batch, Seq_len, 2] or [2].
+
         :return torch.Tensor: Computed time derivatives. Shape: [Batch, Seq_len, 2].
         """
         beta = params[..., 0:1]
@@ -70,6 +73,7 @@ class SISModel(BaseODEModel):
 
         :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, 2].
         :param bool detach_params: If True, detaches the parameters from the PyTorch computation graph.
+
         :return ODESolution: A dataclass holding the computed derivatives (ds_dt) and the scaled parameters.
         """
         params = self.get_scaled_params(detach=detach_params)

@@ -79,6 +79,7 @@ class SEIRMModel(BaseODEModel):
 
         :param torch.Tensor states: The current compartment states. Shape: [Batch, Seq_len, 5].
         :param bool detach_params: Whether to detach parameters from the computation graph.
+
         :return ODESolution: An object containing derivatives and the scaled parameters.
         """
         params = self.get_scaled_params(detach=detach_params)

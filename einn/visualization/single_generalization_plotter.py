@@ -1,24 +1,40 @@
+"""
+Multi-column 4x5 generalization diagnostic plotter for single-model EINN experiments.
+
+Renders per-window epidemiological forecasts, cumulative PCA explained variance, shared 2D
+PCA latent trajectories, pointwise Time-Feature cosine similarity, and pointwise Procrustes
+alignment residuals (thesis Sections 2.5 and 4.1).
+"""
 from pathlib import Path
+from typing import Any
+
+from matplotlib.axes import Axes
+from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator, PercentFormatter
 import numpy as np
 from sklearn.decomposition import PCA
 
-# Retain the original upper bound for displayed PCA components.
-PCA_COMPONENTS_TO_SHOW = 8
+# Maximum number of leading principal components shown in the cumulative variance panels.
+PCA_COMPONENTS_TO_SHOW: int = 8
 
 
 class SingleGeneralizationPlotter:
-    """Render the original experiment reports without changing numerical results."""
+    """
+    Render the 4x5 single-model generalization diagnostic figure from evaluation results.
+
+    Organizes four observation windows as rows across five columns: target forecast,
+    cumulative PCA variance, shared 2D PCA latent trajectory, Time-Feature cosine
+    similarity, and pointwise Procrustes alignment residual.
+    """
 
     def configure_plot_style(self) -> None:
-        """Apply the established publication typography, color palette, tick styles, and vector-compatible font settings.
+        """
+        Apply publication typography, spine removal, grid styling, and TrueType font settings.
 
-
-        :return None: No return value; state or serialized artifacts are updated in place.
+        :return None: Updates matplotlib.pyplot.rcParams in place.
         """
         plt.rcParams.update({
-            "font.family": "DejaVu Sans",  # DejaVu Sans supports the accented Hungarian figure labels.
+            "font.family": "DejaVu Sans",  # Supports accented Hungarian figure labels.
             "font.size": 10,
             "axes.titlesize": 12,
             "axes.titleweight": "semibold",
@@ -36,59 +52,66 @@ class SingleGeneralizationPlotter:
             "figure.facecolor": "white",
             "axes.facecolor": "white",
             "savefig.facecolor": "white",
-            "pdf.fonttype": 42,
+            "pdf.fonttype": 42,  # Embed TrueType fonts in vector outputs.
             "ps.fonttype": 42,
             "legend.frameon": True,
             "legend.framealpha": 0.94,
         })
 
-    def _panel_style(self, ax, time_axis: bool = False):
-        """Apply a consistent readable visual style to one Matplotlib axes.
+    def _panel_style(self, ax: Axes, time_axis: bool = False) -> None:
+        """
+        Apply uniform gridlines and optional integer time-index ticks to a subplot panel.
 
-
-        :param Any ax: Matplotlib axes on which the diagnostic plot is drawn.
-        :param bool time_axis: Whether the panel should use the common simulation time-axis formatting.
-        :return Any: The computed objects, metrics, or artifact paths for the requested operation.
+        :param Axes ax: Target Matplotlib Axes instance.
+        :param bool time_axis: If True, restricts x-axis major ticks to at most 5 integers.
+        :return None: Modifies ax in place.
         """
         ax.set_axisbelow(True)
         ax.grid(True, alpha=0.65)
         if time_axis:
             ax.xaxis.set_major_locator(MaxNLocator(nbins=5, integer=True))
 
-    def _mark_observed(self, ax, end: int, horizon: int):
-        # Highlight the time range actually supplied to the feature encoder.
-        """Shade the observed prefix and draw its cutoff in a forecast panel.
+    def _mark_observed(self, ax: Axes, end: int, horizon: int) -> None:
+        """
+        Shade the observed prefix [0, end - 1] and draw a dashed vertical cutoff at end - 0.5.
 
-
-        :param Any ax: Matplotlib axes on which the diagnostic plot is drawn.
-        :param int end: Last observed index or endpoint of the selected interval.
-        :param int horizon: Total number of simulation time points in the trajectory.
-        :return Any: The computed objects, metrics, or artifact paths for the requested operation.
+        :param Axes ax: Target Matplotlib Axes instance.
+        :param int end: Number of historical timesteps supplied to FeatureModule.
+        :param int horizon: Total trajectory length T.
+        :return None: Modifies ax in place.
         """
         ax.axvspan(0, end - 1, color="#EDF3FA", alpha=0.65, zorder=0)
         ax.axvline(end - 0.5, color="#8B99AC", linestyle="--", linewidth=1.1, zorder=2)
         ax.set_xlim(0, horizon - 1)
 
-    def plot_results(self,
-                     phase_results: list[dict],
-                     shared_pca: PCA,
-                     true_target: np.ndarray,
-                     target_name: str,
-                     output_path: Path,
-                     model_name: str,
-                     embedding_dim: int,
-                     ) -> None:
-        """Render the original multi-column single-model generalization diagnostic figure.
+    def plot_results(
+        self,
+        phase_results: list[dict[str, Any]],
+        shared_pca: PCA,
+        true_target: np.ndarray,
+        target_name: str,
+        output_path: Path,
+        model_name: str,
+        embedding_dim: int,
+    ) -> None:
+        """
+        Render and save the 4x5 single-model generalization diagnostic figure.
 
+        Each entry in phase_results corresponds to one observation window and must provide:
+        't_end' (int), 'predicted_trajectory' of shape (T,), 'mse_future' (float),
+        'cum_variance' of shape (min(T, d_e),), 'pca_95' (int), 'pca_99' (int),
+        'pca_coords' of shape (T, 2), 'cosine_similarity' of shape (T,),
+        'procrustes_pointwise_residual' of shape (T,), and 'procrustes_disparity' (float).
 
-        :param list[dict] phase_results: Predictions and embedding arrays for every selected observation window.
-        :param PCA shared_pca: PCA estimator already fitted to the combined latent embeddings.
-        :param np.ndarray true_target: Noise-free target-compartment reference trajectory.
-        :param str target_name: Human-readable name of the epidemiological target compartment.
-        :param Path output_path: Destination path for the rendered figure.
-        :param str model_name: Name of the mechanistic epidemic model, such as SIR, SIS, or ROST.
-        :param int embedding_dim: Dimensionality of each model-generated latent representation.
-        :return None: No return value; state or serialized artifacts are updated in place.
+        :param list[dict[str, Any]] phase_results: List of exactly 4 per-window evaluation dictionaries.
+        :param PCA shared_pca: PCA estimator fitted jointly on all Feature embeddings (Section 2.5).
+        :param np.ndarray true_target: Noise-free reference target trajectory of shape (T,).
+        :param str target_name: Y-axis label for the target epidemiological compartment.
+        :param Path output_path: Destination file path for the rendered PNG figure.
+        :param str model_name: Epidemiological model identifier (e.g. SIR, SIS, ROST).
+        :param int embedding_dim: Latent embedding dimension d_e displayed in the title.
+        :return None: Saves the figure to output_path and closes it.
+        :raises ValueError: If phase_results does not contain exactly 4 observation windows.
         """
         if len(phase_results) != 4:
             raise ValueError("Pontosan négy megfigyelési ablak szükséges.")
@@ -115,7 +138,7 @@ class SingleGeneralizationPlotter:
             y=0.985
         )
 
-        # Prepare figure-wide legends once, outside individual panels.
+        # Collect legend handles once from the first row for figure-wide legends.
         prediction_handles = None
         pca_handles = None
 
@@ -123,9 +146,7 @@ class SingleGeneralizationPlotter:
             end = result["t_end"]
             title = f"Megfigyelt: {end} időpont"
 
-            # ==========================================================
-            # Show the predicted epidemiological target against the clean reference.
-            # ==========================================================
+            # Column 0: Noise-free reference vs. Feature-branch forecast and out-of-window MSE.
             ax = axes[row, 0]
 
             line_true, = ax.plot(
@@ -156,7 +177,7 @@ class SingleGeneralizationPlotter:
             ax.set_ylabel(target_name)
             ax.grid(alpha=0.25)
 
-            # Report the future-only reconstruction error within each prediction panel.
+            # Annotate observation window length and strictly future MSE (t >= end).
             info_text = (
                 f"Megfigyelt: {end} időpont\n"
                 f"Jövőbeli négyzetes hiba: {result['mse_future']:.3g}"
@@ -179,13 +200,11 @@ class SingleGeneralizationPlotter:
             if row == 0:
                 prediction_handles = [line_true, line_pred, line_obs]
 
-            # ==========================================================
-            # Display cumulative PCA explained variance for the current window.
-            # ==========================================================
+            # Column 1: Per-window cumulative PCA explained variance with 95% and 99% thresholds.
             ax = axes[row, 1]
             cum = result["cum_variance"]
 
-            # Limit visible bars without changing the complete PCA threshold calculation.
+            # Cap displayed components at PCA_COMPONENTS_TO_SHOW without altering pca_95/pca_99.
             max_show = min(PCA_COMPONENTS_TO_SHOW, len(cum))
             shown_x = np.arange(1, max_show + 1)
             shown_y = cum[:max_show]
@@ -225,9 +244,7 @@ class SingleGeneralizationPlotter:
                 )
             )
 
-            # ==========================================================
-            # 3. PCA 2D
-            # ==========================================================
+            # Column 2: 2D Feature latent trajectory (T, 2) projected onto shared_pca.
             ax = axes[row, 2]
             coords = result["pca_coords"]
 
@@ -250,6 +267,7 @@ class SingleGeneralizationPlotter:
                 zorder=2
             )
 
+            # Mark trajectory start (t = 0), end (t = T - 1), and observation cutoff (t = end - 1).
             start_pt = ax.scatter(
                 *coords[0],
                 color="black",
@@ -303,9 +321,7 @@ class SingleGeneralizationPlotter:
             if row == 0:
                 pca_handles = [start_pt, end_pt, obs_pt]
 
-            # ==========================================================
-            # Compare Time and Feature embeddings with cosine similarity across the horizon.
-            # ==========================================================
+            # Column 3: Pointwise Time-Feature cosine similarity across the full horizon (T,).
             ax = axes[row, 3]
             ax.plot(
                 times,
@@ -323,9 +339,7 @@ class SingleGeneralizationPlotter:
             ax.set_title("Idő- és jellemzőmodul hasonlósága", fontweight="bold")
             ax.grid(alpha=0.25)
 
-            # ==========================================================
-            # 5. PROCRUSTES
-            # ==========================================================
+            # Column 4: Pointwise Procrustes alignment residual (T,) and scalar disparity D_Proc.
             ax = axes[row, 4]
             residual = result["procrustes_pointwise_residual"]
 
@@ -358,10 +372,7 @@ class SingleGeneralizationPlotter:
                 )
             )
 
-        # ==============================================================
-        # Place shared legends above the subplots to preserve readable plot areas.
-        # ==============================================================
-
+        # Place shared legends above the subplot grid to avoid overlapping data curves.
         if prediction_handles is not None:
             fig.legend(
                 handles=prediction_handles,

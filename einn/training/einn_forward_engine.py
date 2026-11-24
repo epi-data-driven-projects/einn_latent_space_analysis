@@ -14,11 +14,13 @@ class EINNForwardEngine:
     """
 
     def __init__(self, train_config: EINNTrainConfig, scaling_stats: DataScalingStats):
-        """Initializes the Forward Engine with the training configuration.
+        """
+        Initializes the Forward Engine with the training configuration.
 
         :param EINNTrainConfig train_config: Configuration containing training hyperparameters (e.g., device).
 
         :param DataScalingStats scaling_stats: Statistics fitted on training data for physical-domain conversion.
+
         :return None: No return value; state or serialized artifacts are updated in place.
         """
         self.config = train_config

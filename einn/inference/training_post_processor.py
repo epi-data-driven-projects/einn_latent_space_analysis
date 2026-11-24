@@ -18,7 +18,8 @@ class TrainingPostProcessor:
     """
 
     def __init__(self, output_dir: str):
-        """Initializes the post-processor and ensures the designated output directory exists.
+        """
+        Initializes the post-processor and ensures the designated output directory exists.
 
         :param str output_dir: The directory path where models and statistics will be saved.
 
@@ -28,7 +29,8 @@ class TrainingPostProcessor:
         os.makedirs(self.output_dir, exist_ok=True)
 
     def save_models(self, models: EINNModels, prefix: str = "einn"):
-        """Extracts and saves the PyTorch state dictionaries of all trained neural network modules.
+        """
+        Extracts and saves the PyTorch state dictionaries of all trained neural network modules.
 
         :param EINNModels models: The dataclass containing the trained Time, Feature, and Output modules.
         :param str prefix: A string prefix prepended to the saved files (default: "einn").
@@ -48,7 +50,8 @@ class TrainingPostProcessor:
         print(f"Neural network weights successfully saved to {self.output_dir}.")
 
     def save_scaling_stats(self, scaling_stats: DataScalingStats, filename: str = "scaling_stats.pt"):
-        """Serializes the DataScalingStats dataclass.
+        """
+        Serializes the DataScalingStats dataclass.
 
         This is critical for the independent Evaluator, as it needs the exact means and
         standard deviations used during training to inverse-transform the neural predictions
@@ -65,7 +68,8 @@ class TrainingPostProcessor:
         print(f"Scaling statistics successfully saved to {stats_path}.")
 
     def save_metrics(self, metrics: List[TrainingMetrics], filename: str = "training_metrics.pt"):
-        """Saves the raw training metrics list for later numerical analysis or plotting.
+        """
+        Saves the raw training metrics list for later numerical analysis or plotting.
 
         :param List[TrainingMetrics] metrics: The list of dataclasses collected by the Trainer per epoch/phase.
         :param str filename: The name of the output binary file (default: "training_metrics.pt").

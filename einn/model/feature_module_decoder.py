@@ -53,8 +53,10 @@ class FeatureModuleDecoder(BaseNeuralNetwork):
     def forward(self, h: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
         Decodes the context vector across specified time steps.
+
         :param torch.Tensor h: Context vector from encoder. Shape: [Batch, rnn_out].
         :param torch.Tensor t: Scaled time steps. Shape: [Batch, Seq_len, 1].
+
         :return torch.Tensor: Feature embeddings (e_t^F). Shape: [Batch, Seq_len, dim_out].
         """
         batch_size = h.size(dim=0)
