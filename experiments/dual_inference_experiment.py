@@ -114,7 +114,7 @@ def run_sir_dual_inference_experiment() -> None:
             "ode_future_T": 0.1,
             "ode_future_F": 0.1,
             "mono": 0.0,
-            "param": 0.1,
+            "param": 0.0,
             "kd_target": 10.0,
             "kd_emb": 10.0,
             "ic": 20.0,

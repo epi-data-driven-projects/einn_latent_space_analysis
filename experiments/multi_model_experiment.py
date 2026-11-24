@@ -69,7 +69,7 @@ LOSS_WEIGHTS: dict[str, float] = {
     "ode_future_T": 10.0,
     "ode_future_F": 10.0,
     "mono": 1.0,
-    "param": 0.001,
+    "param": 0.0,
     "kd_target": 8.0,
     "kd_emb": 8.0,
     "ic": 10.0,
