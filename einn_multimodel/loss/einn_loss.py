@@ -311,16 +311,6 @@ class EINNLoss(nn.Module):
 
         # Resolve assumed model labels of shape (B,) for routing Time/ODE/monotonicity terms.
         labels = phase_context.assumed_model_label
-        if labels is None:
-            if len(self.models.ode_models) != 1:
-                raise ValueError(
-                    "assumed_model_label is required for multi-model loss calculation."
-                )
-            labels = torch.zeros(
-                size=(phase_context.x.size(0),),
-                dtype=torch.long,
-                device=phase_context.x.device,
-            )
         labels = labels.reshape(-1).long()
 
         # Optional boolean mask (B,) restricting physics/Time/KD losses to correctly specified
