@@ -153,15 +153,15 @@ class EINNEvaluator:
             random_state=42
         )
 
-        tsne_coords = tsne.fit_transform(emb_f)
+        tsne_coords = tsne.fit_transform(X=emb_f)
         results["tsne_coords"] = tsne_coords
 
         # Full-dimensional Procrustes disparity D_Proc between E_T and E_F (thesis Section 2.5).
-        _, _, disparity = procrustes(emb_t, emb_f)
+        _, _, disparity = procrustes(data1=emb_t, data2=emb_f)
         results["procrustes_disparity"] = float(disparity)
 
         # Pointwise cosine similarity per timestep t: 1 - cosine_distance, shape (T_eval,).
-        cos_sim = 1 - paired_cosine_distances(emb_t, emb_f)
+        cos_sim = 1 - paired_cosine_distances(X=emb_t, Y=emb_f)
         results["cosine_similarity"] = cos_sim
 
         return results
