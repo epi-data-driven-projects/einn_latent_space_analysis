@@ -20,12 +20,10 @@ class TimeModule(BaseNeuralNetwork):
         :param int seed: Random seed for reproducible b_gauss generation.
         """
         super().__init__()
-
-        # Generate and register the fixed Gaussian matrix b_gauss.
-        # register_buffer ensures b_gauss automatically moves to the GPU when .to(device) is called.
-        np.random.seed(seed)
-        b_gauss = np.random.normal(size=(mapping_size, 1)) * scale
-        self.register_buffer('b_gauss', torch.from_numpy(b_gauss).float())
+        rng = np.random.default_rng(seed)
+        b_gauss = rng.normal(size=(mapping_size, 1)) * scale
+        self.register_buffer("b_gauss", torch.from_numpy(b_gauss).float())
+        self.out_dim = int(out_dim)
 
         hidden_dim = 2 * mapping_size
         act_fcn = nn.Tanh()
