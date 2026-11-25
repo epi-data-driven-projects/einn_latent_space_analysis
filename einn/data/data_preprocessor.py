@@ -16,7 +16,7 @@ class DataPreprocessor:
 
     def __init__(self):
         """
-        Initializes the preprocessor with independent scikit-learn StandardScalers 
+        Initializes the preprocessor with independent scikit-learn StandardScalers
         for the exogenous features, targets, and auxiliary curves.
         """
         self.x_scaler = StandardScaler()
@@ -33,17 +33,24 @@ class DataPreprocessor:
         self.t_max: torch.Tensor | None = None
 
     def fit_transform(
-        self, 
-        x_raw: np.ndarray, 
-        y_raw: np.ndarray, 
-        aux_raw: np.ndarray, 
+        self,
+        x_raw: np.ndarray,
+        y_raw: np.ndarray,
+        aux_raw: np.ndarray,
         target_idx: int,
         initial_states: List[float],
-        time_length: int
+        time_length: int  # Correction
     ) -> Tuple[Dict[str, torch.Tensor], DataScalingStats]:
-        """
-        Scales the raw data matrices, anchors the pre-calibrated auxiliary structural data,
+        """Scales the raw data matrices, anchors the pre-calibrated auxiliary structural data,
         and constructs the exact statistical dataclass required by the trainer.
+
+        :param np.ndarray x_raw: Unnormalized synthetic covariates and historical target observations.
+        :param np.ndarray y_raw: Unnormalized target-compartment observations.
+        :param np.ndarray aux_raw: Unnormalized auxiliary compartment reference trajectories.
+        :param int target_idx: Index of the epidemiological target compartment.
+        :param List[float] initial_states: Initial compartment populations in model state order.
+        :param int time_length: Number of time coordinates used to define the temporal scaling interval.
+        :return Tuple[Dict[str, torch.Tensor], DataScalingStats]: Computed result in the configured output representation.
         """
         # Overwrite the targeted compartment in the auxiliary data with the real-world incidence data
         aux_raw_modified = aux_raw.copy()
@@ -60,6 +67,7 @@ class DataPreprocessor:
         self.y_mean = torch.tensor(self.y_scaler.mean_, dtype=torch.float32)
         self.y_std = torch.tensor(self.y_scaler.scale_ + 1e-8, dtype=torch.float32)
 
+        # This prevents concatenated trajectories from changing the time horizon.
         self.t_min = torch.tensor(0.0, dtype=torch.float32)
         self.t_max = torch.tensor(float(time_length - 1), dtype=torch.float32)
 
