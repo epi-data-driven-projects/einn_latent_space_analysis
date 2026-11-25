@@ -21,10 +21,9 @@ class SISModel(BaseODEModel):
         super().__init__(d_s=2, target_idx=target_idx)
         self.population_n = population_n
 
-        # The SIS model constantly recycles population, so neither compartment is strictly monotonic
         self.monotonicity_indices = {
-            "decreasing": [],
-            "increasing": []
+            "decreasing": [0],
+            "increasing": [1]
         }
 
     def init_params(self, param_dict: dict):
