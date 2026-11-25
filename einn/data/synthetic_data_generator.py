@@ -268,22 +268,22 @@ class SyntheticDataGenerator:
             0.0, 1.0, self.seq_len
         ).reshape(-1, 1)
         base_stringency = np.cumsum(
-            self.rng.normal(0.0, 1.0, size=(self.seq_len, 1)),
+            self.rng.normal(loc=0.0, scale=1.0, size=(self.seq_len, 1)),
             axis=0,
         )
 
         # Mix each orthogonalized base process with y_norm to enforce the requested correlations.
         mobility = self._create_correlated_feature(
-            base_mobility, y_norm, correlations["mobility"]
+            semantic_base=base_mobility, target_norm=y_norm, rho=correlations["mobility"], extra_noise=noise_std
         )
         temperature = self._create_correlated_feature(
-            base_temp, y_norm, correlations["temperature"]
+            semantic_base=base_temp, target_norm=y_norm, rho=correlations["temperature"], extra_noise=noise_std
         )
         testing = self._create_correlated_feature(
-            base_testing, y_norm, correlations["testing"]
+            semantic_base=base_testing, target_norm=y_norm, rho=correlations["testing"], extra_noise=noise_std
         )
         stringency = self._create_correlated_feature(
-            base_stringency, y_norm, correlations["stringency"]
+            semantic_base=base_stringency, target_norm=y_norm, rho=correlations["stringency"], extra_noise=noise_std
         )
 
         # Concatenate the 4 correlated covariates and the noisy target observation: shape (T, 5).
