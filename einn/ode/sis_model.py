@@ -59,10 +59,8 @@ class SISModel(BaseODEModel):
 
         ds_dt_val = -infection_term + recovery_term
         di_dt_val = infection_term - recovery_term
-        # Adding another compartment to be able to compare SIR model later
-        dr_dt = torch.zeros_like(i_state)
 
-        return torch.cat(tensors=(ds_dt_val, di_dt_val, dr_dt), dim=-1)
+        return torch.cat(tensors=(ds_dt_val, di_dt_val), dim=-1)
 
     def get_derivatives(self, states: torch.Tensor, detach_params: bool) -> ODESolution:
         """
