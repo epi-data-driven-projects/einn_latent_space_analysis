@@ -17,48 +17,74 @@ from einn.training.phase_optimizers.phase_4_optimizer import Phase4Optimizer
 @pytest.fixture
 def integrated_components() -> dict:
     """
-    Fixture providing all necessary components (Models, Engine, Loss, Configs, Context, ScalingStats)
-    to perform integration tests on the phase optimizers.
+    Fixture providing models, engine, loss calculator, configuration, context,
+    and scaling statistics for optimizer tests.
 
-    :return dict: Dictionary holding all instantiated components required for testing.
+    :return dict: Instantiated components required by the tests.
     """
-    model_config = EINNModelConfig(d_x=5, d_e=10, d_s=5, d_p=4, feature_n_layers=1)
-    train_config = EINNTrainConfig(device='cpu')
+    model_config = EINNModelConfig(
+        d_x=5,
+        d_e=10,
+        d_s=5,
+        d_p=4,
+        feature_n_layers=1,
+    )
+    train_config = EINNTrainConfig(device="cpu")
 
-    # Dummy scaling stats required by Engine and Loss initialization
     scaling_stats = DataScalingStats(
         aux_mean=torch.zeros(5),
         aux_std=torch.ones(5),
         t_min=torch.tensor(0.0),
         t_max=torch.tensor(1.0),
-        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0]
+        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0],
     )
 
-    # Build the neural networks and ODE models
     models = EINNBuilder.build_einn(
         model_config=model_config,
         train_config=train_config,
-        param_calibration={"beta": 0.4, "alpha": 0.2, "gamma": 0.1, "mu": 0.05},
+        param_calibration={
+            "beta": 0.4,
+            "alpha": 0.2,
+            "gamma": 0.1,
+            "mu": 0.05,
+        },
         model_type="SEIRM",
-        seed=42
+        seed=42,
+        target_idx=2,
     )
 
-    engine = EINNForwardEngine(train_config=train_config, scaling_stats=scaling_stats)
-    loss_calc = EINNLoss(config=train_config, ode_model=models.ode_model, scaling_stats=scaling_stats)
+    engine = EINNForwardEngine(
+        train_config=train_config,
+        scaling_stats=scaling_stats,
+    )
+    loss_calc = EINNLoss(
+        config=train_config,
+        ode_model=models.ode_model,
+        scaling_stats=scaling_stats,
+    )
 
-    # Mock Data for the PhaseContext
-    t_full = torch.rand(size=(2, 10, 1))
-    x_past = torch.rand(size=(2, 7, 5))
-    y_past = torch.rand(size=(2, 7, 1))
+    batch_size = 2
+    past_steps = 7
+    x_past = torch.rand(size=(batch_size, past_steps, 5))
+    y_past = torch.rand(size=(batch_size, past_steps, 1))
+    aux_targets = torch.rand(size=(batch_size, past_steps, 5))
+
+    # The time tensor must have the same sequence length as x_past.
+    t_past = (
+        torch.linspace(0.0, 1.0, past_steps)
+        .view(1, past_steps, 1)
+        .expand(batch_size, -1, -1)
+        .clone()
+    )
 
     context = PhaseContext(
         phase_num=1,
         epoch=1,
         x=x_past,
         y=y_past,
-        t=t_full,
-        aux_targets=torch.rand(size=(2, 7, 5)),
-        models=models
+        t=t_past,
+        aux_targets=aux_targets,
+        models=models,
     )
 
     return {
@@ -66,291 +92,341 @@ def integrated_components() -> dict:
         "config": train_config,
         "engine": engine,
         "loss_calc": loss_calc,
-        "context": context
+        "context": context,
     }
 
 
 def _check_requires_grad(module: torch.nn.Module) -> bool:
     """
-    Helper method to verify if a PyTorch module has at least one active, trainable parameter.
+    Check whether a module has at least one trainable parameter.
 
-    :param torch.nn.Module module: The neural network module to inspect.
-    :return bool: True if the module is currently trainable (requires_grad=True), False otherwise.
+    :param torch.nn.Module module: Module to inspect.
+    :return bool: True if at least one parameter requires gradients.
     """
-    return any(p.requires_grad for p in module.parameters())
+    return any(parameter.requires_grad for parameter in module.parameters())
 
 
-def test_phase_one_optimizer_freezing_rules(integrated_components: dict):
+def test_phase_one_optimizer_freezing_rules(
+    integrated_components: dict,
+) -> None:
     """
-    Tests if Phase1Optimizer correctly initializes the Adam optimizer for the Time and Output modules,
-    and ensures the Feature Module and ODE parameters are completely frozen.
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
-    """
-    models = integrated_components["models"]
-
-    opt1 = Phase1Optimizer(
-        models=models,
-        config=integrated_components["config"],
-        engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
-    )
-
-    # Apply the freezing rules
-    opt1.prepare_network_states()
-
-    assert _check_requires_grad(models.time_module) is True, "Time module must be active in Phase 1."
-    assert _check_requires_grad(models.output_module) is True, "Output module must be active in Phase 1."
-    assert _check_requires_grad(models.feature_module) is False, "Feature module MUST be frozen in Phase 1."
-    assert _check_requires_grad(models.ode_model) is False, "ODE params MUST be frozen in Phase 1."
-
-
-def test_phase_two_optimizer_freezing_rules(integrated_components: dict):
-    """
-    Tests if Phase2Optimizer correctly unfreezes ODE parameters alongside the Time and Output modules.
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
+    Check that Phase 1 trains the Time and Output modules and freezes
+    the Feature module and ODE parameters.
     """
     models = integrated_components["models"]
 
-    opt2 = Phase2Optimizer(
+    optimizer = Phase1Optimizer(
         models=models,
         config=integrated_components["config"],
         engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
+        loss_calculator=integrated_components["loss_calc"],
     )
+    optimizer.prepare_network_states()
 
-    opt2.prepare_network_states()
-
-    assert _check_requires_grad(models.time_module) is True, "Time module must be active in Phase 2."
-    assert _check_requires_grad(models.output_module) is True, "Output module must be active in Phase 2."
-    assert _check_requires_grad(models.ode_model) is True, "ODE params must be active in Phase 2."
-    assert _check_requires_grad(models.feature_module) is False, "Feature module MUST be frozen in Phase 2."
+    assert _check_requires_grad(models.time_module) is True
+    assert _check_requires_grad(models.output_module) is True
+    assert _check_requires_grad(models.feature_module) is False
+    assert _check_requires_grad(models.ode_model) is False
 
 
-def test_phase_three_optimizer_freezing_rules(integrated_components: dict):
+def test_phase_two_optimizer_freezing_rules(
+    integrated_components: dict,
+) -> None:
     """
-    Tests if Phase3Optimizer appropriately configures the networks for Knowledge Distillation.
-    The ODE params are frozen, but Time, Feature, and Output modules remain active.
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
+    Check that Phase 2 trains the Time, Output, and ODE components while
+    freezing the Feature module.
     """
     models = integrated_components["models"]
 
-    opt3 = Phase3Optimizer(
+    optimizer = Phase2Optimizer(
         models=models,
         config=integrated_components["config"],
         engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
+        loss_calculator=integrated_components["loss_calc"],
     )
+    optimizer.prepare_network_states()
 
-    opt3.prepare_network_states()
-
-    assert _check_requires_grad(models.time_module) is True, "Time module must be active in Phase 3."
-    assert _check_requires_grad(models.feature_module) is True, "Feature module must be active in Phase 3."
-    assert _check_requires_grad(models.output_module) is True, "Output module must be active in Phase 3."
-    assert _check_requires_grad(models.ode_model) is False, "ODE params MUST be frozen in Phase 3."
+    assert _check_requires_grad(models.time_module) is True
+    assert _check_requires_grad(models.output_module) is True
+    assert _check_requires_grad(models.ode_model) is True
+    assert _check_requires_grad(models.feature_module) is False
 
 
-def test_phase_four_optimizer_freezing_rules(integrated_components: dict):
+def test_phase_three_optimizer_freezing_rules(
+    integrated_components: dict,
+) -> None:
     """
-    Tests if Phase4Optimizer strictly isolates the gradient flow to the Output Module
-    and ODE params, completely freezing the latent embeddings (Time and Feature modules).
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
+    Check that Phase 3 trains the Time, Feature, and Output modules while
+    freezing the ODE parameters.
     """
     models = integrated_components["models"]
 
-    opt4 = Phase4Optimizer(
+    optimizer = Phase3Optimizer(
         models=models,
         config=integrated_components["config"],
         engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
+        loss_calculator=integrated_components["loss_calc"],
     )
+    optimizer.prepare_network_states()
 
-    opt4.prepare_network_states()
-
-    assert _check_requires_grad(models.time_module) is False, "Time module MUST be frozen in Phase 4."
-    assert _check_requires_grad(models.feature_module) is False, "Feature module MUST be frozen in Phase 4."
-    assert _check_requires_grad(models.output_module) is True, "Output module must be active in Phase 4."
-    assert _check_requires_grad(models.ode_model) is True, "ODE params must be active in Phase 4."
+    assert _check_requires_grad(models.time_module) is True
+    assert _check_requires_grad(models.feature_module) is True
+    assert _check_requires_grad(models.output_module) is True
+    assert _check_requires_grad(models.ode_model) is False
 
 
-def test_optimizer_training_mode_toggle(integrated_components: dict):
+def test_phase_four_optimizer_freezing_rules(
+    integrated_components: dict,
+) -> None:
     """
-    Verifies that the base optimizer not only toggles 'requires_grad',
-    but correctly sets '.train()' and '.eval()' modes for elements like Dropout and BatchNorm.
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
+    Check that Phase 4 trains the Output module and ODE parameters while
+    freezing the Time and Feature modules.
     """
     models = integrated_components["models"]
 
-    opt1 = Phase1Optimizer(
+    optimizer = Phase4Optimizer(
         models=models,
         config=integrated_components["config"],
         engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
+        loss_calculator=integrated_components["loss_calc"],
+    )
+    optimizer.prepare_network_states()
+
+    assert _check_requires_grad(models.time_module) is False
+    assert _check_requires_grad(models.feature_module) is False
+    assert _check_requires_grad(models.output_module) is True
+    assert _check_requires_grad(models.ode_model) is True
+
+
+def test_optimizer_training_mode_toggle(
+    integrated_components: dict,
+) -> None:
+    """
+    Check that the optimizer switches active modules to training mode and
+    frozen modules to evaluation mode.
+    """
+    models = integrated_components["models"]
+
+    optimizer = Phase1Optimizer(
+        models=models,
+        config=integrated_components["config"],
+        engine=integrated_components["engine"],
+        loss_calculator=integrated_components["loss_calc"],
     )
 
-    # Forcefully set everything to train mode beforehand
-    for model in [models.time_module, models.feature_module, models.output_module]:
+    for model in [
+        models.time_module,
+        models.feature_module,
+        models.output_module,
+    ]:
         model.train()
 
-    opt1.prepare_network_states()
+    optimizer.prepare_network_states()
 
-    # Feature module should be switched to eval() mode during Phase 1
-    assert models.time_module.training is True, "Active modules must be in training mode."
-    assert models.feature_module.training is False, "Frozen modules MUST be switched to eval mode."
+    assert models.time_module.training is True
+    assert models.feature_module.training is False
 
 
-def test_optimizer_parameter_group_fidelity(integrated_components: dict):
+def test_optimizer_parameter_group_fidelity(
+    integrated_components: dict,
+) -> None:
     """
-    Verifies that the internal Adam optimizer instances precisely track
-    only the parameters designated by the specific phase via itertools.chain.
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
+    Check that the Phase 4 optimizer tracks only the ODE and Output parameters.
     """
     models = integrated_components["models"]
 
-    # In Phase 4, only the ODE model and the Output module should be passed to the optimizer.
-    opt4 = Phase4Optimizer(
+    optimizer = Phase4Optimizer(
         models=models,
         config=integrated_components["config"],
         engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
+        loss_calculator=integrated_components["loss_calc"],
     )
 
-    # Calculate the exact number of parameter tensors expected
-    expected_param_count = len(list(models.ode_model.parameters())) + len(list(models.output_module.parameters()))
+    expected_param_count = (
+        len(list(models.ode_model.parameters()))
+        + len(list(models.output_module.parameters()))
+    )
+    tracked_params = optimizer.optimizer.param_groups[0]["params"]
 
-    # Extract the actual number of parameters tracked by Adam
-    tracked_params = opt4.optimizer.param_groups[0]['params']
+    assert len(tracked_params) == expected_param_count, (
+        f"Adam tracks {len(tracked_params)} parameters, "
+        f"but {expected_param_count} were expected."
+    )
 
-    assert len(tracked_params) == expected_param_count, \
-        f"Adam optimizer tracks {len(tracked_params)} parameters, but exactly {expected_param_count} were expected."
 
-
-def test_optimizer_edge_case_uninitialized_step(integrated_components: dict):
+def test_optimizer_edge_case_uninitialized_step(
+    integrated_components: dict,
+) -> None:
     """
-    Ensures a RuntimeError is safely raised if `step()` is called
-    before the networks are prepared and the optimizer is configured.
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
+    Check that step() raises an error if the optimizer is uninitialized.
     """
-    opt1 = Phase1Optimizer(
+    optimizer = Phase1Optimizer(
         models=integrated_components["models"],
         config=integrated_components["config"],
         engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
+        loss_calculator=integrated_components["loss_calc"],
     )
 
-    # Forcefully detach the optimizer to simulate an uninitialized state
-    opt1.optimizer = None
+    optimizer.optimizer = None
 
-    with pytest.raises(expected_exception=RuntimeError, match="Optimizer was not initialized"):
-        opt1.step(context=integrated_components["context"])
+    with pytest.raises(
+        expected_exception=RuntimeError,
+        match="Optimizer was not initialized",
+    ):
+        optimizer.step(context=integrated_components["context"])
 
 
-def test_optimizer_full_integration_step(integrated_components: dict):
+def test_optimizer_full_integration_step(
+    integrated_components: dict,
+) -> None:
     """
-    Runs a complete training iteration (Forward -> Loss -> Backward -> Step)
-    using the Phase1Optimizer to ensure gradients flow correctly and weights are updated.
-
-    :param dict integrated_components: The fixture containing the model and optimizer configurations.
+    Run a complete Phase 1 forward, loss, backward, and optimizer step.
     """
-    opt1 = Phase1Optimizer(
+    optimizer = Phase1Optimizer(
         models=integrated_components["models"],
         config=integrated_components["config"],
         engine=integrated_components["engine"],
-        loss_calculator=integrated_components["loss_calc"]
+        loss_calculator=integrated_components["loss_calc"],
+    )
+    optimizer.prepare_network_states()
+
+    initial_weights = (
+        integrated_components["models"]
+        .output_module.net[0]
+        .weight.clone()
     )
 
-    opt1.prepare_network_states()
+    loss_value, loss_dict = optimizer.step(
+        context=integrated_components["context"]
+    )
 
-    # Clone the initial weights of the Output Module for comparison
-    initial_weights = integrated_components["models"].output_module.net[0].weight.clone()
+    assert isinstance(loss_value, float)
+    assert loss_value >= 0.0
 
-    # Execute a full optimization step
-    loss_value, loss_dict = opt1.step(context=integrated_components["context"])
-
-    # Validations
-    assert isinstance(loss_value, float), "The step method must return a float loss value."
-    assert loss_value >= 0.0, "The calculated loss value must be non-negative."
-
-    updated_weights = integrated_components["models"].output_module.net[0].weight
-
-    # Prove that optimizer.step() successfully mutated the network's weights
-    assert not torch.equal(input=initial_weights, other=updated_weights), \
-        "Optimizer failed to update the model weights during the training step."
+    updated_weights = (
+        integrated_components["models"]
+        .output_module.net[0]
+        .weight
+    )
+    assert not torch.equal(initial_weights, updated_weights), (
+        "Optimizer did not update the model weights."
+    )
 
 
-def test_sequential_phase_optimizer_integration():
+def test_sequential_phase_optimizer_integration() -> None:
     """
-    Chains all 4 phase optimizers sequentially and executes exactly 1 training
-    step (forward + backward + optimize) on each.
+    Run one training step through each of the four phase optimizers.
     """
-    # Setup basic configurations and models
-    model_config = EINNModelConfig(d_x=5, d_e=10, d_s=5, d_p=4, feature_n_layers=1)
-    train_config = EINNTrainConfig(device='cpu', learning_rate=0.01)
+    model_config = EINNModelConfig(
+        d_x=5,
+        d_e=10,
+        d_s=5,
+        d_p=4,
+        feature_n_layers=1,
+    )
+    train_config = EINNTrainConfig(
+        device="cpu",
+        learning_rate=0.01,
+    )
 
     scaling_stats = DataScalingStats(
         aux_mean=torch.zeros(5),
         aux_std=torch.ones(5),
         t_min=torch.tensor(0.0),
         t_max=torch.tensor(1.0),
-        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0]
+        initial_states=[0.99, 0.01, 0.0, 0.0, 0.0],
     )
 
     models = EINNBuilder.build_einn(
-        model_config=model_config, train_config=train_config,
-        param_calibration={"beta": 0.4, "alpha": 0.2, "gamma": 0.1, "mu": 0.05},
-        model_type="SEIRM", seed=42
+        model_config=model_config,
+        train_config=train_config,
+        param_calibration={
+            "beta": 0.4,
+            "alpha": 0.2,
+            "gamma": 0.1,
+            "mu": 0.05,
+        },
+        model_type="SEIRM",
+        seed=42,
+        target_idx=2,
     )
 
-    engine = EINNForwardEngine(train_config=train_config, scaling_stats=scaling_stats)
-    loss_calculator = EINNLoss(config=train_config, ode_model=models.ode_model, scaling_stats=scaling_stats)
+    engine = EINNForwardEngine(
+        train_config=train_config,
+        scaling_stats=scaling_stats,
+    )
+    loss_calculator = EINNLoss(
+        config=train_config,
+        ode_model=models.ode_model,
+        scaling_stats=scaling_stats,
+    )
 
-    # Instantiate all 4 optimizers (representing the trainer's internal state)
-    opt1 = Phase1Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
-    opt2 = Phase2Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
-    opt3 = Phase3Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
-    opt4 = Phase4Optimizer(models=models, config=train_config, engine=engine, loss_calculator=loss_calculator)
+    optimizers = [
+        Phase1Optimizer(
+            models=models,
+            config=train_config,
+            engine=engine,
+            loss_calculator=loss_calculator,
+        ),
+        Phase2Optimizer(
+            models=models,
+            config=train_config,
+            engine=engine,
+            loss_calculator=loss_calculator,
+        ),
+        Phase3Optimizer(
+            models=models,
+            config=train_config,
+            engine=engine,
+            loss_calculator=loss_calculator,
+        ),
+        Phase4Optimizer(
+            models=models,
+            config=train_config,
+            engine=engine,
+            loss_calculator=loss_calculator,
+        ),
+    ]
 
-    # Create a single dummy batch of data
-    batch_size, seq_len = 2, 5
+    batch_size = 2
+    seq_len = 5
+
     x = torch.rand(size=(batch_size, seq_len, 5))
     y = torch.rand(size=(batch_size, seq_len, 1))
-    t = torch.linspace(0, 1, seq_len).unsqueeze(0).expand(batch_size, -1).unsqueeze(2)
+    t = (
+        torch.linspace(0.0, 1.0, seq_len)
+        .view(1, seq_len, 1)
+        .expand(batch_size, -1, -1)
+        .clone()
+    )
     aux_targets = torch.rand(size=(batch_size, seq_len, 5))
 
-    optimizers = [opt1, opt2, opt3, opt4]
     recorded_losses = []
 
-    # Execute 1 step sequentially across all phases
-    for phase_idx, opt in enumerate(optimizers, start=1):
-
+    for phase_idx, optimizer in enumerate(optimizers, start=1):
         context = PhaseContext(
             phase_num=phase_idx,
             epoch=1,
-            x=x, y=y, t=t, aux_targets=aux_targets,
-            models=models
+            x=x,
+            y=y,
+            t=t,
+            aux_targets=aux_targets,
+            models=models,
         )
 
-        # Execute 1 step (forward, loss, backward, step)
         try:
-            # We use float() to extract the scalar value if it's a 0-dim tensor
-            loss_value, loss_dict = opt.step(context=context)
-        except Exception as e:
-            pytest.fail(f"Phase {phase_idx} failed during sequential execution with error: {str(e)}")
+            loss_value, loss_dict = optimizer.step(context=context)
+        except Exception as exc:
+            pytest.fail(
+                f"Phase {phase_idx} failed during sequential execution: {exc}"
+            )
 
-        # Ensure a valid loss was calculated and gradients aren't NaN
-        assert not torch.isnan(torch.tensor(loss_value)), f"Phase {phase_idx} resulted in a NaN loss!"
+        assert not torch.isnan(torch.tensor(loss_value)), (
+            f"Phase {phase_idx} resulted in a NaN loss."
+        )
         recorded_losses.append(loss_value)
 
-    # Final Assertions
-    assert len(recorded_losses) == 4, "Not all phases completed their step successfully."
+    assert len(recorded_losses) == 4
 
-    # Ensure models are left in the state defined by Phase 4
-    # (Output and ODE trainable, Time and Feature frozen)
     assert next(models.output_module.parameters()).requires_grad is True
     assert next(models.time_module.parameters()).requires_grad is False
