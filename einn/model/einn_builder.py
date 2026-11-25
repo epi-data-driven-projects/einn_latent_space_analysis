@@ -6,8 +6,11 @@ from einn.model.feature_module import FeatureModule
 from einn.model.interface.einn_models import EINNModels
 from einn.model.output_module import OutputModule
 from einn.model.time_module import TimeModule
+from einn.ode.seir_model import SEIRModel
 from einn.ode.seirm_model import SEIRMModel
 from einn.ode.sir_model import SIRModel
+from einn.ode.sis_model import SISModel
+from einn.ode.rost_model import RostHungaryModel
 
 
 class EINNBuilder:
@@ -21,6 +24,7 @@ class EINNBuilder:
         model_config: EINNModelConfig,
         train_config: EINNTrainConfig,
         param_calibration: dict,
+        target_idx: int,
         model_type: str = "SEIRM",
         population_n: float | None = 1.0,
         seed: int = 42
@@ -35,6 +39,8 @@ class EINNBuilder:
         :param Optional[float] population_n: Total population for the SEIRM model.
         :param int seed: Seed for random operations in modules (e.g., Fourier mapping).
         :return EINNModels: A container holding the initialized neural and ODE models on the correct device.
+
+        :param int target_idx: Index of the epidemiological target compartment.
         """
         time_module = TimeModule(
             mapping_size=model_config.time_mapping_size,
@@ -57,10 +63,18 @@ class EINNBuilder:
             d_s=model_config.d_s
         ).to(device=train_config.device)
 
+        model_type = model_type.upper()
+
         if model_type == "SEIRM":
-            ode_model = SEIRMModel(population_n=population_n)
+            ode_model = SEIRMModel(population_n=population_n, target_idx=target_idx)
+        elif model_type == "SEIR":
+            ode_model = SEIRModel(population_n=population_n, target_idx=target_idx)
         elif model_type == "SIR":
-            ode_model = SIRModel()
+            ode_model = SIRModel(target_idx=target_idx)
+        elif model_type == "ROST":
+            ode_model = RostHungaryModel(target_idx=target_idx)
+        elif model_type == "SIS":
+            ode_model = SISModel(target_idx=target_idx)
         else:
             raise ValueError(f"Unsupported ODE model type: {model_type}")
 
