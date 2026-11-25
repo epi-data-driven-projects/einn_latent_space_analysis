@@ -8,77 +8,74 @@ from einn.data.einn_dataset import EINNDataset
 
 class ExpandingWindowLoader(EINNDataset):
     """
-    A PyTorch Dataset designed explicitly for expanding-prefix time-series forecasting.
+    PyTorch Dataset implementing the expanding-window scheme from thesis Section 2.3.
 
-    This loader takes multiple independent temporal sequences and slices them into progressively larger
-    temporal windows (e.g., [0-20], [0-40], [0-60] days).
+    For each simulated trajectory of length max_days, generates nested observation prefixes
+    of lengths min_days, min_days + step, ..., up to max_days. Unobserved future entries in
+    the input tensor X are zero-padded to max_days so all prefixes can be batched uniformly,
+    while full-horizon targets (y, t, aux_targets) remain unmasked for loss computation.
     """
 
     def __init__(
-            self,
-            x_list: List[np.ndarray],
-            y_list: List[np.ndarray],
-            t_list: List[np.ndarray],
-            aux_list: List[np.ndarray],
-            min_days: int = 10,
-            max_days: int = 200,
-            step: int = 10,
-            device: str = 'cpu'
+        self,
+        x_list: List[np.ndarray],
+        y_list: List[np.ndarray],
+        t_list: List[np.ndarray],
+        aux_list: List[np.ndarray],
+        min_days: int = 10,
+        max_days: int = 200,
+        step: int = 10,
+        device: str = 'cpu'
     ):
         """
-        Initializes and pre-computes all expanding sliding windows for the entire dataset.
+        Pre-compute and cache all expanding-prefix samples across all trajectories.
 
-        :param List[np.ndarray] x_list: List of 2D arrays containing exogenous input sequences (one array per state).
-        :param List[np.ndarray] y_list: List of 2D arrays containing ground-truth target trajectories.
-        :param List[np.ndarray] t_list: List of 2D arrays representing unscaled time vectors.
-        :param List[np.ndarray] aux_list: List of 2D arrays containing ODE pre-calibrated auxiliary curves.
-        :param int min_days: The minimum number of historical days required before predicting the future.
-        :param int max_days: The maximum sequence length in the dataset. Used to standardize tensor sizes via padding.
-        :param int step: The stride/interval at which the window expands (e.g., expanding by 10 days at a time).
-        :param str device: The target computation device ('cpu' or 'cuda').
+        :param List[np.ndarray] x_list: Standardized input sequences, each of shape (T, d_x).
+        :param List[np.ndarray] y_list: Standardized target trajectories, each of shape (T, 1).
+        :param List[np.ndarray] t_list: Unscaled time index grids, each of shape (T, 1).
+        :param List[np.ndarray] aux_list: Standardized auxiliary compartment states, each of shape (T, d_s).
+        :param int min_days: Shortest observation prefix length included in training.
+        :param int max_days: Full trajectory horizon T used as the padded sequence length.
+        :param int step: Increment between consecutive expanding-window prefix lengths.
+        :param str device: Target PyTorch device string (e.g. 'cpu' or 'cuda:0').
         """
         self.device = torch.device(device)
-        self.samples = []
+        self.samples: List[Dict[str, torch.Tensor]] = []
 
-        # Iterate over all independently simulated states (e.g., 20 different regions or parameterizations)
+        # Build nested observation prefixes for every independently simulated trajectory.
         for x, y, t, aux in zip(x_list, y_list, t_list, aux_list):
-
-            # Slice each full sequence into progressively larger historical windows
             for current_days in range(min_days, max_days + 1, step):
-                # Padding the exogenous inputs
-                # Shorter sequences are padded with 0.0 up to max_days to ensure uniform tensor shapes for batching
+                # Copy the observed prefix [0, current_days) and zero-pad the unobserved future to (max_days, d_x).
                 x_padded = torch.zeros((max_days, x.shape[1]), dtype=torch.float32, device=self.device)
                 x_padded[:current_days] = torch.tensor(x[:current_days], dtype=torch.float32, device=self.device)
 
-                # Generating the Attention Mask
-                # A float mask where 1.0 represents valid real data and 0.0 represents the padded future.
-                # (Note: PyTorch MultiHeadAttention requires boolean masks where True = padding, so this mask
-                # will be inverted inside the Dataset __getitem__ or the Runner logic before being fed to MHA).
+                # Build padding mask of shape (max_days,): 0.0 marks valid observed steps, 1.0 marks padded future steps
                 mask = torch.ones(max_days, dtype=torch.float32, device=self.device)
                 mask[:current_days] = 0.0
 
-                # 3. Store the pre-computed window as a dictionary ready for the DataLoader
+                # Store padded prefix inputs together with full-horizon targets (y, t, aux_targets).
                 self.samples.append({
-                    'X': x_padded,
-                    'mask': mask,
-                    'y': torch.tensor(y, dtype=torch.float32, device=self.device),
-                    't': torch.tensor(t, dtype=torch.float32, device=self.device),
-                    'aux_targets': torch.tensor(aux, dtype=torch.float32, device=self.device)
+                    'X': x_padded,                                                      # Shape: (max_days, d_x)
+                    'mask': mask,                                                       # Shape: (max_days,)
+                    'y': torch.tensor(y, dtype=torch.float32, device=self.device),      # Shape: (T, 1)
+                    't': torch.tensor(t, dtype=torch.float32, device=self.device),      # Shape: (T, 1)
+                    'aux_targets': torch.tensor(aux, dtype=torch.float32, device=self.device)  # Shape: (T, d_s)
                 })
 
     def __len__(self) -> int:
         """
-        Returns the total number of expanding windows generated across all states.
+        Return the total number of expanding-window samples across all trajectories.
 
-        :return int: Total number of samples.
+        :return int: Number of pre-computed (trajectory, prefix_length) pairs.
         """
         return len(self.samples)
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
         """
-        Retrieves a specific windowed dictionary by index.
+        Retrieve a single pre-computed expanding-window sample by index.
 
-        :param int index: The batch index requested by the PyTorch DataLoader.
-        :return Dict[str, torch.Tensor]: A dictionary containing the padded tensors and masks.
+        :param int index: Sample index in [0, len(self)].
+        :return Dict[str, torch.Tensor]: Sample dictionary with keys 'X' (max_days, d_x),
+            'mask' (max_days,), 'y' (T, 1), 't' (T, 1), and 'aux_targets' (T, d_s).
         """
         return self.samples[index]
