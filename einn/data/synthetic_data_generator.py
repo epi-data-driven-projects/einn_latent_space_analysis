@@ -1,3 +1,6 @@
+"""
+Synthetic epidemiological trajectory, noisy observation, and correlated covariate generator.
+"""
 from typing import Optional
 
 import numpy as np
@@ -9,13 +12,12 @@ from einn.ode.base_ode_model import BaseODEModel
 
 class SyntheticDataGenerator:
     """
-    Generate ODE trajectories, noisy observations, and correlated covariates.
+    Generate synthetic ODE trajectories, noisy target observations, and correlated covariates.
 
-    This class creates synthetic datasets for epidemiological modeling. It uses
-    a specified ODE model to generate ground-truth epidemic curves and then
-    constructs a realistic observed dataset by adding Gaussian noise and generating
-    synthetic socio-economic or environmental covariates (e.g., mobility, temperature)
-    that correlate with the primary epidemic signal.
+    Implements the controlled synthetic data pipeline described in thesis Section 2.3:
+    numerically integrates a mechanistic epidemiological ODE with torchdiffeq.odeint,
+    perturbs the target compartment with additive Gaussian noise, and constructs four
+    exogenous covariates with prescribed Pearson correlations to the noise-free target.
     """
 
     def __init__(
@@ -23,17 +25,14 @@ class SyntheticDataGenerator:
         true_ode_model: BaseODEModel,
         seq_len: int = 200,
         rng: Optional[np.random.Generator] = None,
-    ):
+    ) -> None:
         """
-        Initializes the Synthetic Data Generator.
+        Initialize the generator with a mechanistic ODE model and random number generator.
 
-        :param BaseODEModel true_ode_model: The mathematical ODE model used to
-            generate the true latent states (e.g., SIR, SIS).
-        :param int seq_len: The sequence length (number of time steps) for the
-            generated time series. Defaults to 200.
-        :param Optional[np.random.Generator] rng: A NumPy random number generator
-            instance for reproducible noise and covariate generation. If None, a
-            default generator is instantiated.
+        :param BaseODEModel true_ode_model: Epidemiological ODE model defining ds/dt = f_ODE(s, Omega).
+        :param int seq_len: Default number of discrete timesteps T per simulated trajectory.
+        :param Optional[np.random.Generator] rng: NumPy RNG for reproducible noise and covariate sampling;
+            creates a fresh default_rng() if None.
         """
         self.true_ode_model = true_ode_model
         self.seq_len = int(seq_len)
@@ -46,22 +45,13 @@ class SyntheticDataGenerator:
         seq_len: Optional[int] = None,
     ) -> np.ndarray:
         """
-        Integrate the configured ODE model and return the continuous states over time.
+        Numerically integrate the ODE model on t = 0, 1, ..., T - 1 using fixed-step RK4.
 
-        This method solves the initial value problem for the provided ODE model
-        using the 4th-order Runge-Kutta (RK4) method.
-
-        :param list[float] initial_states: The starting values for each compartment
-            in the ODE model at time t=0. Length must match `true_ode_model.d_s`.
-        :param list[float] true_params: The physical parameters governing the ODE
-            dynamics (e.g., beta, gamma). Length must match expected parameters.
-        :param Optional[int] seq_len: The number of time steps to integrate. If
-            None, defaults to `self.seq_len`.
-
-        :return np.ndarray: A 2D array of shape (seq_len, d_s) containing the
-            computed trajectory for all ODE compartments.
-        :raises ValueError: If the length of `initial_states` or `true_params`
-            does not match the model's expected dimensions.
+        :param list[float] initial_states: Initial compartment proportions s(0) of length d_s.
+        :param list[float] true_params: Constant mechanistic ODE parameter vector Omega of length d_p.
+        :param Optional[int] seq_len: Optional override for the number of timesteps T; defaults to self.seq_len.
+        :return np.ndarray: Noise-free compartment trajectories of shape (T, d_s) (float32).
+        :raises ValueError: If initial_states or true_params length mismatches the ODE model dimensions.
         """
         n_steps = self.seq_len if seq_len is None else int(seq_len)
         if len(initial_states) != self.true_ode_model.d_s:
@@ -76,15 +66,24 @@ class SyntheticDataGenerator:
                 f"Expected {expected_d_p} parameters, got {len(true_params)}."
             )
 
+        # Add a leading batch dimension (1, d_s) and (1, d_p) to match BaseODEModel's batched signature.
         initial_tensor = torch.tensor(
             [initial_states], dtype=torch.float32
         )
         params_tensor = torch.tensor([true_params], dtype=torch.float32)
-        t_eval = torch.arange(n_steps, dtype=torch.float32)
+        t_eval = torch.arange(n_steps, dtype=torch.float32)  # Shape: (T,)
 
-        def odefunc(t, states):
+        def odefunc(t: torch.Tensor, states: torch.Tensor) -> torch.Tensor:
+            """
+            Evaluate the ODE right-hand side f_ODE(states, params) for torchdiffeq.odeint.
+
+            :param torch.Tensor t: Current scalar integration time (unused for autonomous ODEs).
+            :param torch.Tensor states: Current compartment state tensor of shape (1, d_s).
+            :return torch.Tensor: Time derivative ds/dt of shape (1, d_s).
+            """
             return self.true_ode_model(states=states, params=params_tensor)
 
+        # Integrate with RK4 (step_size=1.0); odeint returns (T, 1, d_s), squeezed to (T, d_s).
         with torch.no_grad():
             states = odeint(
                 odefunc,
@@ -99,12 +98,78 @@ class SyntheticDataGenerator:
     @staticmethod
     def _standardize(values: np.ndarray) -> np.ndarray:
         """
-        Applies Z-score standardization to a numpy array.
+        Standardize a time series to zero mean and unit population standard deviation (ddof=0).
 
-        :param np.ndarray values: The array to standardize.
-        :return np.ndarray: The standardized array with mean 0 and standard deviation 1.
+        :param np.ndarray values: Input array of arbitrary shape (typically (T, 1)).
+        :return np.ndarray: Standardized float64 array with the same shape as values.
+        :raises ValueError: If the input is non-finite or nearly constant (std <= 1e-12).
         """
-        return (values - np.mean(values)) / (np.std(values) + 1e-8)
+        x = np.asarray(values, dtype=np.float64)
+        mean = np.mean(x)
+        std = np.std(x)
+        if not np.isfinite(std) or std <= 1e-12:
+            raise ValueError(
+                "Cannot standardize a (nearly) constant or non-finite time series."
+            )
+        return (x - mean) / std
+
+    def _orthogonalized_semantic_base(
+        self,
+        semantic_base: np.ndarray,
+        target_norm: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Construct a standardized covariate basis vector u orthogonal to the target y (<u, y> = 0).
+
+        Applies Gram-Schmidt projection over the time axis. If semantic_base is nearly collinear
+        with target_norm, retries up to 7 times with fresh standard normal draws.
+
+        :param np.ndarray semantic_base: Raw covariate basis series of shape (T, 1).
+        :param np.ndarray target_norm: Standardized noise-free target series y of shape (T, 1).
+        :return np.ndarray: Standardized basis vector u of shape (T, 1) satisfying <u, y> = 0.
+        :raises ValueError: If shapes mismatch, T < 3, target_norm has zero variance, or
+            orthogonalization fails across all attempts.
+        """
+        y = np.asarray(target_norm, dtype=np.float64)
+        base = np.asarray(semantic_base, dtype=np.float64)
+        if base.shape != y.shape:
+            raise ValueError(
+                f"Semantic base and target must have the same shape: "
+                f"{base.shape} vs {y.shape}."
+            )
+        if y.size < 3:
+            raise ValueError(
+                "At least three time points are needed for a nonzero vector "
+                "orthogonal to both the constant vector and y."
+            )
+
+        y_flat = y.reshape(-1)
+        norm_sq = float(np.dot(y_flat, y_flat))
+        if norm_sq <= 1e-20:
+            raise ValueError("Target time series has zero variance.")
+
+        # Attempt Gram-Schmidt on the semantic base first; fall back to Gaussian noise if degenerate.
+        for attempt in range(8):
+            candidate = base if attempt == 0 else self.rng.normal(size=base.shape)
+            v = np.asarray(candidate, dtype=np.float64).reshape(-1).copy()
+            v -= v.mean()
+            if np.std(v) <= 1e-12:
+                continue
+
+            # Subtract the projection of v onto y, then re-center to guard against floating-point drift.
+            v -= (np.dot(v, y_flat) / norm_sq) * y_flat
+            v -= v.mean()
+            if np.std(v) <= 1e-10:
+                continue
+
+            # Standardization preserves both zero mean and orthogonality to y.
+            u = self._standardize(v).reshape(base.shape)
+            return u
+
+        raise ValueError(
+            "Could not construct an independent nonzero semantic component "
+            "orthogonal to the target time series."
+        )
 
     def _create_correlated_feature(
         self,
@@ -114,28 +179,29 @@ class SyntheticDataGenerator:
         extra_noise: float = 0.05,
     ) -> np.ndarray:
         """
-        Creates a synthetic covariate that correlates with the target epidemic signal.
+        Mix a semantic basis with the target to achieve correlation rho plus additive noise.
 
-        Blends a baseline semantic signal (e.g., random walk, sine wave) with the
-        standardized epidemic curve to achieve a specific Pearson correlation coefficient.
+        Implements x_i = rho * y + sqrt(1 - rho^2) * u + epsilon with epsilon ~ N(0, extra_noise^2),
+        where y and u are standardized and orthogonal (thesis Section 2.3).
 
-        :param np.ndarray semantic_base: The base pattern for the covariate (e.g., sine wave).
-        :param np.ndarray target_norm: The standardized target epidemic signal (e.g., infected curve).
-        :param float rho: The desired correlation coefficient (-1.0 to 1.0) between the
-            generated feature and the target signal.
-        :param float extra_noise: The standard deviation of the additive Gaussian noise.
-            Defaults to 0.05.
-
-        :return np.ndarray: The generated synthetic covariate array.
-        :raises ValueError: If `rho` is not within the [-1, 1] range.
+        :param np.ndarray semantic_base: Raw exogenous basis process of shape (T, 1).
+        :param np.ndarray target_norm: Standardized noise-free target series y of shape (T, 1).
+        :param float rho: Prescribed Pearson correlation coefficient in [-1, 1].
+        :param float extra_noise: Standard deviation sigma_epsilon of additive Gaussian noise.
+        :return np.ndarray: Correlated synthetic covariate series of shape (T, 1) (float64).
+        :raises ValueError: If rho is outside [-1, 1] or extra_noise is negative/non-finite.
         """
-        if not -1.0 <= rho <= 1.0:
+        if not np.isfinite(rho) or not -1.0 <= rho <= 1.0:
             raise ValueError(f"Correlation must be in [-1, 1], got {rho}.")
+        if not np.isfinite(extra_noise) or extra_noise < 0:
+            raise ValueError("extra_noise must be finite and non-negative.")
 
-        semantic_norm = self._standardize(semantic_base)
-        mixed = rho * target_norm + np.sqrt(max(0.0, 1.0 - rho**2)) * semantic_norm
-        mixed += self.rng.normal(0.0, extra_noise, size=mixed.shape)
-        return mixed
+        y = self._standardize(target_norm)
+        u = self._orthogonalized_semantic_base(semantic_base, y)
+
+        mixed = rho * y + np.sqrt(max(0.0, 1.0 - rho**2)) * u
+        epsilon = self.rng.normal(0.0, extra_noise, size=mixed.shape)
+        return mixed + epsilon
 
     def generate(
         self,
@@ -145,26 +211,24 @@ class SyntheticDataGenerator:
         correlations: Optional[dict] = None,
     ) -> dict[str, np.ndarray]:
         """
-        Generate one true trajectory, noisy observations, and four covariates.
+        Simulate one ODE trajectory, perturb the target compartment, and generate 4 covariates.
 
-        This method acts as the primary data synthesis pipeline. It integrates the ODE,
-        extracts the target compartment, adds proportional Gaussian noise to simulate
-        real-world measurement errors, and creates four correlated features
-        (mobility, temperature, testing, stringency).
+        Assembles the 5-dimensional input matrix x_raw = [mobility, temperature, testing,
+        stringency, noisy_y] of shape (T, 5) using the four base processes defined in thesis
+        Section 2.3 (white noise, sinusoid, linear trend, and Gaussian random walk).
 
-        :param list[float] initial_states: The starting compartment values at t=0.
-        :param list[float] true_params: The physical ODE parameters.
-        :param float noise_std: The baseline standard deviation for the observational noise,
-            which is scaled relative to the peak of the target signal. Defaults to 0.05.
-        :param Optional[dict] correlations: A dictionary specifying the desired correlation
-            for each covariate. If None, default socio-economic correlations are used.
-
-        :return dict[str, np.ndarray]: A dictionary containing:
-            - 'x_raw': The concatenated (seq_len, 5) matrix of covariates and noisy observations.
-            - 'y_raw': The pristine (seq_len, 1) target trajectory.
-            - 'y_noisy': The noisy (seq_len, 1) target observations (clipped at 0).
-            - 'true_latent_states': The full (seq_len, d_s) pristine ODE trajectory.
+        :param list[float] initial_states: Initial compartment proportions s(0) of length d_s.
+        :param list[float] true_params: Constant mechanistic ODE parameters Omega of length d_p.
+        :param float noise_std: Relative Gaussian noise level scaled by the target peak value.
+        :param Optional[dict] correlations: Mapping for keys 'mobility', 'temperature', 'testing',
+            and 'stringency' to target correlations rho_i in [-1, 1]; uses defaults if None.
+        :return dict[str, np.ndarray]: Dictionary with keys:
+            'x_raw' of shape (T, 5),
+            'y_raw' (noise-free target) of shape (T, 1),
+            'y_noisy' (non-negative noisy target) of shape (T, 1), and
+            'true_latent_states' (all ODE compartments) of shape (T, d_s).
         """
+        # Numerically integrate the ground-truth ODE system: shape (T, d_s).
         states = self.generate_trajectory(
             initial_states=initial_states,
             true_params=true_params,
@@ -178,6 +242,7 @@ class SyntheticDataGenerator:
                 "stringency": 0.9,
             }
 
+        # Extract the clean target compartment of shape (T, 1) and add peak-scaled Gaussian noise.
         target_idx = int(getattr(self.true_ode_model, "target_idx", states.shape[1] - 1))
         pure_y = states[:, target_idx : target_idx + 1]
 
@@ -188,8 +253,12 @@ class SyntheticDataGenerator:
             scale=adjusted_noise_std,
             size=pure_y.shape,
         )
+        # Clip noisy observations at zero to preserve epidemiological non-negativity.
         noisy_y = np.clip(noisy_y, a_min=0.0, a_max=None)
 
+        # Construct the four exogenous base processes of shape (T, 1) (thesis Section 2.3):
+        # white noise (mobility), periodic sinusoid (temperature), linear trend (testing),
+        # and cumulative Gaussian random walk (stringency).
         y_norm = self._standardize(pure_y)
         base_mobility = self.rng.normal(0.0, 1.0, size=(self.seq_len, 1))
         base_temp = np.sin(
@@ -203,6 +272,7 @@ class SyntheticDataGenerator:
             axis=0,
         )
 
+        # Mix each orthogonalized base process with y_norm to enforce the requested correlations.
         mobility = self._create_correlated_feature(
             base_mobility, y_norm, correlations["mobility"]
         )
@@ -216,6 +286,7 @@ class SyntheticDataGenerator:
             base_stringency, y_norm, correlations["stringency"]
         )
 
+        # Concatenate the 4 correlated covariates and the noisy target observation: shape (T, 5).
         x_raw = np.concatenate(
             [mobility, temperature, testing, stringency, noisy_y],
             axis=1,
