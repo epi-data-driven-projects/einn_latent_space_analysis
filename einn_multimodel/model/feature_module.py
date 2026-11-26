@@ -92,8 +92,6 @@ class FeatureModule(BaseNeuralNetwork):
             shape (B,); required when num_models > 1.
         :return FeatureModuleOutputs: Structured output containing embeddings of shape (B, T, d_e)
             and selected_model_label of shape (B,).
-        :raises ValueError: If true_model_label and assumed_model_label conflict, if no label is
-            provided for a multi-model encoder, or if the label count does not match batch size B.
         """
         # Encode observed prefixes with packed BiGRU: latent_seqs (B, N, rnn_out), valid_mask (B, N).
         latent_seqs, _, valid_mask = self.encoder.encode_sequence(x=x, mask=mask)

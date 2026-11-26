@@ -37,8 +37,6 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
         :param float dropout: Dropout probability applied in stacked GRU, fusion, attention, and output layers.
         :param int num_models: Number of distinct epidemiological model classes in the embedding table.
         :param int model_label_dim: Dimensionality of the static learned model-label embedding e_m (default 5).
-
-        :raises ValueError: If bidirectional is True and rnn_out is odd.
         """
         super().__init__()
 
@@ -135,7 +133,6 @@ class FeatureModuleEncoder(BaseNeuralNetwork):
         :param Optional[torch.Tensor] mask: Optional padding mask of shape (B, N) (0 = observed, 1 = padded).
         :return tuple[torch.Tensor, torch.Tensor, torch.Tensor]: Tuple (latent_seqs, context_unconditioned,
             valid_mask) with shapes (B, N, rnn_out), (B, rnn_out), and (B, N) respectively.
-        :raises ValueError: If any sequence in the batch has zero observed timesteps.
         """
         valid_mask = self._valid_mask(mask, x)
         lengths = valid_mask.sum(dim=1)  # Shape: (B,)
